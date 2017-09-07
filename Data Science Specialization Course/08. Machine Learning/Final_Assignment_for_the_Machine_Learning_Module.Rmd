@@ -1,0 +1,127 @@
+---
+title: "Final Assignment for the Machine Learning Module"
+author: "Kamran A."
+date: "4 August 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Introduction
+
+In this assignment we are tasked to work with accelerometer data, collected during a study of physical exercises. A group of six male participants had accelerometers attached to various body parts and were asked to perform a barbell lift exercise. In total, they have performed 5 sets of this exercise, out of which 1 set was performed correctly and 4 sets were intentionally performed wrongly, featuring the most common mistakes made by beginner athletes. The correct set was labeled as class "A" and the wrong sets were labeled as classes "B" to "E"
+
+The aim of this assignment is to build a model, which takes accelerometer excercise data as input and correctly predicts which class does the observation belong to. This could potentially be used to develop accelerometer software, which would automatically inform an athlete if he/she was performing an exercise in the wrong manner.
+
+## Getting Data
+
+The training and testing data sets are available at the URL below.
+
+```{r}
+library(caret); 
+
+URL1<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+
+URL2<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+download.file(URL1, "training.csv"); download.file(URL2, "testing.csv")
+
+training<-read.csv("training.csv", na.strings = c("", "NA")); 
+
+testing<-read.csv("testing.csv", na.strings = c("", "NA"))
+```
+
+## Variable Selection
+
+Lets take a brief look at our training data.
+
+```{r}
+
+data.frame(dim(training), dim(testing), row.names = c("observations", "variables"))
+
+```
+
+It seems that we have a total of 160 variables, but luckily for us, a fair number of these are summary variables, which were recorded only at the end of the each exercise and are not needed for our analysis. Lets see how many we have:
+
+```{r}
+table(apply(training, 2, function(x) sum(complete.cases(x))))
+
+```
+
+We have 100 variables with 406 entries and 60 variables with 19622 entries. Hence, we can remove the summary variables as follows:
+
+```{r}
+var<-apply(training, 2, function(x) sum(complete.cases(x)));  var<-names(var[var!=406])
+
+training<-training[, var]; testing<-testing[, c(var[-60], "problem_id")]
+```
+
+Lastly, since we are interested in accelerometer readings, we do not need the first 7 variables, which record participant name, as well as number and time of the measurement:
+
+```{r}
+names(training)[1:7]
+```
+
+```{r}
+training<-training[,-c(1:7)]; testing<-testing[,-c(1:7)]
+
+data.frame(dim(training), dim(testing), row.names = c("observations", "variables"))
+```
+## Pre-Processing
+
+Now that we have selected the variables which are of interest to us, let us see if any of them are highly correlated with one another. 
+
+```{r}
+corM<-cor(training[,-53])
+
+length(findCorrelation(corM, cutoff = 0.75))
+```
+
+As we can see, 21 out 52 of our independent variables have an absolute correlation value greater than 0.75. This implies that many of these variables will be redundant. Hence, we can use Principal Component analysis to reduce the noise and dimensionality of this data set. 
+
+```{r}
+trans<- preProcess(training, method = c("center", "scale", "pca"))
+
+training<- predict(trans, training); testing<-predict(trans, testing)
+```
+
+Finally, since our training set is quite big, we can afford to split it into training and validation sets. This will allow us to test the model efficiency several times, before finally applying it once to the testing set. 
+
+```{r}
+set.seed(5937)
+
+part<-createDataPartition(training$classe, times = 1, p = .75, list = FALSE)
+
+val<-training[-part,]; training<-training[part,]
+```
+
+## Training Models
+
+At last, we come to the model fitting stage. In order to maximize the predictive accuracy of the final model, we shall make use of repeated cross validation and ensemble models, namely random forest and the generalized boosted model. Once done, we shall see which model has higher prediction accuracy on the validation set. 
+
+```{r, cache=TRUE}
+control<- trainControl(method="repeatedcv", number=10, repeats=3)
+
+metric<-"Accuracy"
+
+fit1<-train(classe~., data=training, trControl=control, metric=metric, method = "rf")
+
+fit2<-train(classe~., data=training, trControl=control, metric=metric, method = "gbm", verbose=FALSE)
+
+pred1<-predict(fit1, val); pred2<-predict(fit2, val)
+
+round(confusionMatrix(pred1, val$classe)$overall, 4); round(confusionMatrix(pred2, val$classe)$overall, 4)
+
+```
+As we can see, the random forest model has much higher accuracy. Hence, we will use it to predict the class of observation in the test set. 
+
+## Final Results
+
+```{r }
+
+predict(fit1, testing)
+```
+
+In the end our model has accurately predicted 19 out of 20 observations on the training set, which amounts to 95% accuracy. 
