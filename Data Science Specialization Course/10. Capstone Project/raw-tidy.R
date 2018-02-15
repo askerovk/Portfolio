@@ -106,6 +106,8 @@ n1grams <- n1grams[-str_which(string = n1grams$words, pattern = "[^a-z//']+"),]
 
 n1grams <- n1grams[order(count, decreasing = TRUE),]
 
+D1 <-  sum(n1grams$count == 1) / (sum(n1grams$count == 1) + 2 * sum(n1grams$count == 2))
+
 temp <- n1grams[!(n1grams$words %in% stopwords())]
 
 table <- data.table(i = 0, ratio.count = 0, ratio.length = 0)
@@ -468,6 +470,8 @@ rmsuffix <- function(x){
 
 ngrams <- n5grams$ngrams
 
+save(n5grams, file = "n5grams")
+
 rm(n5grams)
 
 l <- length(ngrams)
@@ -489,12 +493,6 @@ getaddon <- function(data){
     
     cl <- makeCluster(detectCores()-1)
     
-    l <- length(data)
-    
-    data <- list(data[1 : round(l/3)], 
-                 data[(round(l/3)+1) : round(l*2/3)], 
-                 data[(round(l*2/3)+1) : l])
-    
     clusterExport(cl =cl, varlist = c("data", "rmprefix", "rmsuffix"))
     
     clusterEvalQ(cl = cl, expr = library(stringr))
@@ -514,8 +512,6 @@ getaddon <- function(data){
     })
     
     stopCluster(cl)
-    
-    rm(data)
     
     suffix <- paste(unlist(suffix), collapse = " ")
     
@@ -568,117 +564,23 @@ save(n5suffix, file = "n5suffix")
 
 rm(n5suffix)
 
-n5prefix <- unlist(str_split(string = n5prefix, pattern = " "))
+prefix <- dfm(tokens(x = n5prefix, what = "fastestword"))
 
-n5prefix <- data.table(count = rep(x = 1, time = l), ngrams = n5prefix)
-
-prefix.1 <- n5prefix[1 : round(l/2),]
-
-prefix.2 <- n5prefix[(round(l/2)+1) : l,]
+prefix <- data.table(ngrams = as.character(colnames(prefix)), prefix = colSums(prefix))
 
 rm(n5prefix)
 
-save(prefix.2, file = "prefix.2")
-
-rm(prefix.2)
-
-gc()
-
-prefix.1 <- group_by(prefix.1, ngrams)
-
-prefix.1 <- summarise(prefix.1, prefix = sum(count))
-
-prefix.1 <- data.table(prefix.1)
-
-save(prefix.1, file = "prefix.1")
-
-rm(prefix.1)
-
-load("prefix.2")
-
-prefix.2 <- group_by(prefix.2, ngrams)
-
-prefix.2 <- summarise(prefix.2, prefix = sum(count))
-
-prefix.2 <- data.table(prefix.2)
-
-load("prefix.1")
-
-prefix.3 <- merge(x = prefix.1, y = prefix.2, by = "ngrams", all = TRUE)
-
-rm(prefix.1, prefix.2)
-
-gc()
-
-prefix.3$prefix.x[is.na(prefix.3$prefix.x)] <- 0 
-
-prefix.3$prefix.y[is.na(prefix.3$prefix.y)] <- 0
-
-gc()
-
-prefix.3 <- data.table(ngrams = prefix.3$ngrams, prefix = rowSums(prefix.3[, -1]))
-
-save(prefix.3, file = "prefix.3")
-
-rm(prefix.3)
-
 load("n5suffix")
 
-n5suffix <- as.character(tokens(n5suffix, "fastestword"))
+suffix <- dfm(tokens(x = n5suffix, what = "fastestword"))
 
-n5suffix <- data.table(count = rep(x = 1, time = l), ngrams = n5suffix)
-
-suffix.1 <- n5suffix[1 : round(l/2),]
-
-suffix.2 <- n5suffix[(round(l/2)+1) : l,]
+suffix <- data.table(ngrams = as.character(colnames(suffix)), suffix = colSums(suffix))
 
 rm(n5suffix)
 
-save(suffix.2, file = "suffix.2")
+n4addon <- merge(x = prefix, y = suffix, by = "ngrams", all = TRUE)
 
-rm(suffix.2)
-
-gc()
-
-suffix.1 <- group_by(suffix.1, ngrams)
-
-suffix.1 <- summarise(suffix.1, suffix = sum(count))
-
-suffix.1 <- data.table(suffix.1)
-
-save(suffix.1, file = "suffix.1")
-
-rm(suffix.1)
-
-load("suffix.2")
-
-suffix.2 <- group_by(suffix.2, ngrams)
-
-suffix.2 <- summarise(suffix.2, suffix = sum(count))
-
-suffix.2 <- data.table(suffix.2)
-
-load("suffix.1")
-
-suffix.3 <- merge(x = suffix.1, y = suffix.2, by = "ngrams", all = TRUE)
-
-rm(suffix.1, suffix.2)
-
-suffix.3$suffix.x[is.na(suffix.3$suffix.x)] <- 0 
-
-suffix.3$suffix.y[is.na(suffix.3$suffix.y)] <- 0
-
-gc()
-
-suffix.3 <- data.table(ngrams = suffix.3$ngrams, suffix = rowSums(suffix.3[, .(suffix.x, suffix.y)]))
-
-save(suffix.3, file = "suffix.3")
-
-load("prefix.3")
-
-n4addon <- merge(x = prefix.3, y = suffix.3, by = "ngrams", all = TRUE)
-
-rm(prefix.3, suffix.3)
+rm(prefix, suffix)
 
 n4addon$prefix[is.na(n4addon$prefix)] <- 0
 
@@ -686,122 +588,11 @@ n4addon$suffix[is.na(n4addon$suffix)] <- 0
 
 save(n4addon, file = "n4addon")
 
-rm(n4addon)
-
-load("n3addon.1")
-
-load("n3addon.2")
-
-n3addon <- merge(x = n3addon.1, y = n3addon.2, by = "ngrams", all = TRUE)
-
-rm(n3addon.1, n3addon.2)
-
-n3addon$prefix.x[is.na(n3addon$prefix.x)] <- 0 
-
-n3addon$prefix.y[is.na(n3addon$prefix.y)] <- 0 
-
-n3addon <- data.table(ngrams = n3addon$ngrams, prefix = rowSums(n3addon[, -1]))
-
-temp <- lapply(X = n3addon$ngrams, FUN = rmsuffix)
-
-n3addon$ngrams <- as.character(temp)
-
-rm(temp)
-
-n3addon <- group_by(n3addon, ngrams)
-
-n3addon <- data.table(summarise(n3addon, prefix = sum(prefix)))
-
-save(n3addon, file = "n3addon")
-
-temp <- lapply(X = n3addon$ngrams, FUN = rmsuffix)
-
-n3addon$ngrams <- as.character(temp)
-
-rm(temp)
-
-n2addon <- group_by(n3addon, ngrams)
-
-rm(n3addon)
-
-n2addon <- data.table(summarise(n2addon, prefix = sum(prefix)))
-
-save(n2addon, file = "n2addon")
-
-temp <- lapply(X = n2addon$ngrams, FUN = rmsuffix)
-
-n2addon$ngrams <- as.character(temp)
-
-rm(temp)
-
-n1addon <- group_by(n2addon, ngrams)
-
-rm(n2addon)
-
-n1addon <- data.table(summarise(n1addon, prefix = sum(prefix)))
-
-save(n1addon, file = "n1addon")
-
-rm(n1addon)
-
-load("n5grams")
-
-load("n4addon")
-
-history <- function(data) {
-    
-    cl <- makeCluster(detectCores()-1)
-    
-    l <- length(data)
-    
-    data <- list(data[1 : round(l/3)], 
-                 data[(round(l/3)+1) : round(l*2/3)], 
-                 data[(round(l*2/3)+1) : l])
-    
-    clusterExport(cl =cl, varlist = c("data", "rmsuffix"))
-    
-    clusterEvalQ(cl = cl, expr = library(stringr))
-    
-    history <- parLapply(cl = cl, X = data, fun = function(x){
-        
-        lapply(X = x, FUN = rmsuffix)
-        
-    })
-    
-    stopCluster(cl)
-    
-    as.character(unlist(history))
-}
-
-temp <- history(n5grams$ngrams)
-
-n5grams <- data.table(n5grams, history = temp)
-
-rm(temp)
-
-n5grams <- merge(x = n5grams, y = n4addon[, -c("prefix")], by.x = "history", by.y = "ngrams", all.x = TRUE)
-
-names(n5grams) <- c("history", "ngrams", "count", "history.suffix", "history.p.count")
-
-n4addon <- n4addon[, c("ngrams", "prefix")]
-
 n4grams <- fread("backup/n4grams.csv")[, -1]
-
-n5grams <- merge(x = n5grams, y = n4grams, by.x = "history", by.y = "ngrams", all.x = TRUE)
-
-names(n5grams) <- c("history", "ngrams", "count", "history.suffix", "history.p.count", "history.count")
-
-n5grams <- n5grams[, c("ngrams", "count", "history.count", "history.suffix", "history.p.count")]
-
-save(n5grams, file = "n5grams")
-
-rm(n5grams)
 
 n4grams <- merge(x = n4grams, y = n4addon, by = "ngrams", all = TRUE)
 
-rm(n4addon)
-
-######################################## Generating N3 Prefix and Suffix###########################
+rm("n4addon")
 
 z <- str_which(string = n4grams$ngrams, pattern = "^sss")
 
@@ -809,19 +600,65 @@ n4grams$prefix[z] <- n4grams$count[z]
 
 rm(z)
 
-count <- n4grams[, -c("ngrams")]
+save(n4grams, file = "n4grams")
 
-save(count, file = "count")
+rm(n4grams)
 
-rm(count)
+load("n5grams")
+
+temp <- n5grams$ngrams
+
+save(temp, file = "temp")
+
+rm(temp)
+
+n5grams <- n5grams[, -1]
+
+gc()
+
+load("n5suffix")
+
+n5suffix <- as.character(tokens(x = n5suffix, what = "fastestword"))
+
+n5grams <- data.table(n5grams, ngrams = n5suffix)
+
+rm(n5suffix)
+
+gc()
+
+load("n4grams")
+
+n5grams <- left_join(x = n5grams, y = n4grams[, -c("prefix")], by = "ngrams")
+
+names(n5grams) <- c("count", "ngrams", "history.count", "history.suffix")
+
+n5grams <- n5grams[, c("count", "history.count", "history.suffix")]
+
+rm("n4grams")
+
+gc()
+
+load("temp")
+
+n5grams <- data.table(ngrams = temp, n5grams)
+
+rm(temp)
+
+save(n5grams, file = "n5grams")
+
+rm(n5grams)
+
+######################################## Generating N3 Prefix and Suffix###########################
+
+load("n4grams")
 
 ngrams <- n4grams$ngrams
 
-n4grams <- n4grams[count >=3, ]
+temp <- n4grams$prefix
 
-n4grams <- n4grams[, -c("count")]
+save(temp, file = "temp")
 
-save(n4grams, file = "n4grams")
+rm(temp)
 
 rm(n4grams)
 
@@ -874,286 +711,71 @@ raw.4 <- getaddon(temp)
 
 rm(temp, ngrams)
 
-prefix <- paste(raw.1[[1]], raw.2[[1]], raw.3[[1]], raw.4[[1]], collapse = " ")
+n4prefix <- paste(raw.1[[1]], raw.2[[1]], raw.3[[1]], raw.4[[1]], collapse = " ")
 
-suffix <- paste(raw.1[[2]], raw.2[[2]], raw.3[[2]], raw.4[[2]], collapse = " ")
+n4suffix <- paste(raw.1[[2]], raw.2[[2]], raw.3[[2]], raw.4[[2]], collapse = " ")
 
 rm(raw.1, raw.2, raw.3, raw.4)
 
-save(prefix, file = "prefix")
+save(n4prefix, file = "n4prefix")
 
-save(suffix, file = "suffix")
+save(n4suffix, file = "n4suffix")
 
-rm(suffix)
+rm(n4suffix)
 
-load("count")
+prefix <- dfm(tokens(x = n4prefix, what = "fastestword"))
 
-prefix <- unlist(str_split(string = prefix, pattern = " "))
+prefix <- data.table(ngrams = as.character(colnames(prefix)), prefix = colSums(prefix))
 
-prefix <- data.table(ngrams = prefix, count = count$count, prefix = count$prefix)
+rm(n4prefix)
 
-rm(count)
+load("n4suffix")
 
-l <- length(prefix$count)
+suffix <- tokens(x = n4suffix, what = "fastestword")
 
-prefix.1 <- prefix[1 : round(l/2),]
+rm(n4suffix)
 
-prefix.2 <- prefix[(round(l/2)+1) : l,]
+history.prefix <- as.character(suffix)
 
-rm(prefix)
+suffix <- dfm(suffix)
 
-save(prefix.2, file = "prefix.2")
+suffix <- data.table(ngrams = as.character(colnames(suffix)), suffix = colSums(suffix))
 
-rm(prefix.2)
+n3addon <- merge(x = prefix, y = suffix, by = "ngrams", all = TRUE)
 
-gc()
-
-prefix.1 <- group_by(prefix.1, ngrams)
-
-prefix.1 <- summarise(prefix.1, count1 = sum(count <= 2 & prefix ==1), 
-                      count2 = sum(count <= 2 & prefix == 2 ), "count3+" = sum(count >= 3))
-
-n2addon.1 <- data.table(ngrams = prefix.1$ngrams, prefix = prefix.1$count2)
-
-n2addon.1 <- n2addon.1[prefix != 0]
-
-save(n2addon.1, file = "n2addon.1")
-
-rm(n2addon.1)
-
-prefix.1$count2 <- prefix.1$count2 * 2
-
-prefix.1 <- data.table(ngrams = prefix.1$ngrams, prefix = rowSums(prefix.1[, -1]))
-
-save(prefix.1, file = "prefix.1")
-
-rm(prefix.1)
-
-load("prefix.2")
-
-prefix.2 <- group_by(prefix.2, ngrams)
-
-prefix.2 <- summarise(prefix.2, count1 = sum(count <= 2 & prefix ==1), 
-                      count2 = sum(count <= 2 & prefix == 2 ), "count3+" = sum(count >= 3))
-
-n2addon.2 <- data.table(ngrams = prefix.2$ngrams, prefix = prefix.2$count2)
-
-n2addon.2 <- n2addon.2[prefix != 0]
-
-save(n2addon.2, file = "n2addon.2")
-
-rm(n2addon.2)
-
-prefix.2$count2 <- prefix.2$count2 * 2
-
-prefix.2 <- data.table(ngrams = prefix.2$ngrams, prefix = rowSums(prefix.2[, -1]))
-
-load("prefix.1")
-
-prefix.3 <- merge(x = prefix.1, y = prefix.2, by = "ngrams", all = TRUE)
-
-rm(prefix.1, prefix.2)
+rm(prefix, suffix)
 
 gc()
-
-prefix.3$prefix.x[is.na(prefix.3$prefix.x)] <- 0 
-
-prefix.3$prefix.y[is.na(prefix.3$prefix.y)] <- 0
-
-gc()
-
-prefix.3 <- data.table(ngrams = prefix.3$ngrams, prefix = rowSums(prefix.3[, -1]))
-
-save(prefix.3, file = "prefix.3")
-
-rm(prefix.3)
-
-load("suffix")
-
-load("count")
-
-suffix <- unlist(str_split(string = suffix, pattern = " "))
-
-suffix <- data.table(ngrams = suffix, count = count$count, prefix = count$prefix)
-
-rm(count)
-
-l <- length(suffix$count)
-
-suffix.1 <- suffix[1 : round(l/2),]
-
-suffix.2 <- suffix[(round(l/2)+1) : l,]
-
-rm(suffix)
-
-save(suffix.2, file = "suffix.2")
-
-rm(suffix.2)
-
-gc()
-
-suffix.1 <- group_by(suffix.1, ngrams)
-
-suffix.1 <-  summarise(suffix.1, count1 = sum(count <= 2 & prefix ==1), 
-                       count2 = sum(count <= 2 & prefix == 2 ), "count3+" = sum(count >= 3))
-
-p.count <- suffix.1$count1 + suffix.1$count2*2
-
-suffix.1 <- data.table(ngrams = suffix.1$ngrams, suffix = rowSums(suffix.1[, -1]), p.count = p.count)
-
-save(suffix.1, file = "suffix.1")
-
-rm(suffix.1)
-
-load("suffix.2")
-
-suffix.2 <- group_by(suffix.2, ngrams)
-
-suffix.2 <-  summarise(suffix.2, count1 = sum(count <= 2 & prefix ==1), 
-                       count2 = sum(count <= 2 & prefix == 2 ), "count3+" = sum(count >= 3))
-
-p.count <- suffix.2$count1 + suffix.2$count2*2
-
-suffix.2 <- data.table(ngrams = suffix.2$ngrams, suffix = rowSums(suffix.2[, -1]), p.count = p.count)
-
-rm(p.count)
-
-load("suffix.1")
-
-suffix.3 <- merge(x = suffix.1, y = suffix.2, by = "ngrams", all = TRUE)
-
-rm(suffix.1, suffix.2)
-
-suffix.3$suffix.x[is.na(suffix.3$suffix.x)] <- 0 
-
-suffix.3$suffix.y[is.na(suffix.3$suffix.y)] <- 0
-
-suffix.3$p.count.x[is.na(suffix.3$p.count.x)] <- 0
-
-suffix.3$p.count.y[is.na(suffix.3$p.count.y)] <- 0
-
-gc()
-
-suffix.3 <- data.table(ngrams = suffix.3$ngrams, suffix = rowSums(suffix.3[, .(suffix.x, suffix.y)]),
-                       p.count =  rowSums(suffix.3[, .(p.count.x, p.count.y)]))
-
-save(suffix.3, file = "suffix.3")
-
-rm(suffix.3)
-
-load("n3addon")
-
-load("prefix.3")
-
-n3addon <- merge(x = n3addon, y = prefix.3, by = "ngrams", all = TRUE)
-
-rm(prefix.3)
-
-n3addon$prefix.x[is.na(n3addon$prefix.x)] <- 0
-
-n3addon$prefix.y[is.na(n3addon$prefix.y)] <- 0
-
-n3addon <- data.table(ngrams = n3addon$ngrams, prefix = rowSums(n3addon[, -1]))
-
-load("suffix.3")
-
-n3addon <- merge(x = n3addon, y = suffix.3, by = "ngrams", all = TRUE)
-
-rm(suffix.3)
 
 n3addon$prefix[is.na(n3addon$prefix)] <- 0
 
 n3addon$suffix[is.na(n3addon$suffix)] <- 0
 
-n3addon$p.count[is.na(n3addon$p.count)] <- 0
+load("temp")
+
+history.prefix <- data.table(ngrams = history.prefix, history.prefix = temp)
+
+rm(temp)
+
+gc()
+
+history.prefix <- group_by(history.prefix, ngrams)
+
+history.prefix <- summarise(history.prefix, history.prefix = sum(history.prefix))
+
+n3addon <- merge(x = n3addon, y = history.prefix, by = "ngrams", all = TRUE)
+
+rm(history.prefix)
+
+n3addon$history.prefix[is.na(n3addon$history.prefix)] <- 0
 
 save(n3addon, file = "n3addon")
-
-rm(n3addon)
-
-load("n2addon.1")
-
-load("n2addon.2")
-
-n2addon.3 <- merge(x = n2addon.1, y = n2addon.2, by = "ngrams", all = TRUE)
-
-rm(n2addon.1, n2addon.2)
-
-n2addon.3$prefix.x[is.na(n2addon.3$prefix.x)] <- 0 
-
-n2addon.3$prefix.y[is.na(n2addon.3$prefix.y)] <- 0 
-
-n2addon.3 <- data.table(ngrams = n2addon.3$ngrams, prefix = rowSums(n2addon.3[, -1]))
-
-temp <- lapply(X = n2addon.3$ngrams, FUN = rmsuffix)
-
-n2addon.3$ngrams <- as.character(temp)
-
-rm(temp)
-
-n2addon.3 <- group_by(n2addon.3, ngrams)
-
-n2addon.3 <- data.table(summarise(n2addon.3, prefix = sum(prefix)))
-
-load("n2addon")
-
-n2addon <- merge(x = n2addon, y = n2addon.3, by = "ngrams", all = TRUE)
-
-n2addon$prefix.x[is.na(n2addon$prefix.x)] <- 0 
-
-n2addon$prefix.y[is.na(n2addon$prefix.y)] <- 0 
-
-n2addon <- data.table(ngrams = n2addon$ngrams, prefix = rowSums(n2addon[, -1]))
-
-save(n2addon, file = "n2addon")
-
-rm(n2addon)
-
-temp <- lapply(X = n2addon.3$ngrams, FUN = rmsuffix)
-
-n2addon.3$ngrams <- as.character(temp)
-
-rm(temp)
-
-n1addon.1 <- group_by(n2addon.3, ngrams)
-
-rm(n2addon.3)
-
-n1addon.1<- data.table(summarise(n1addon.1, prefix = sum(prefix)))
-
-load("n1addon")
-
-n1addon <- merge(x = n1addon, y = n1addon.1, by = "ngrams", all = TRUE)
-
-n1addon$prefix.x[is.na(n1addon$prefix.x)] <- 0 
-
-n1addon$prefix.y[is.na(n1addon$prefix.y)] <- 0 
-
-n1addon <- data.table(ngrams = n1addon$ngrams, prefix = rowSums(n1addon[, -1]))
-
-save(n1addon, file = "n1addon")
-
-rm(n1addon, n1addon.1)
-
-load("n3addon")
-
-load("n4grams")
-
-temp <- history(n4grams$ngrams)
-
-n4grams <- data.table(n4grams, history = temp)
-
-rm(temp)
-
-n4grams <- merge(x = n4grams, y = n3addon[, c("ngrams", "suffix", "p.count")], by.x = "history", by.y = "ngrams", all.x = TRUE)
-
-names(n4grams) <- c("history", "ngrams", "prefix", "history.suffix", "history.p.count")
-
-n3addon <- n3addon[, c("ngrams", "prefix")]
 
 n3grams <- fread("backup/n3grams.csv")[, -1]
 
 n3grams <- merge(x = n3grams, y = n3addon, by = "ngrams", all = TRUE)
+
+rm("n3addon")
 
 z <- str_which(string = n3grams$ngrams, pattern = "^sss")
 
@@ -1161,32 +783,65 @@ n3grams$prefix[z] <- n3grams$count[z]
 
 rm(z)
 
-rm(n3addon)
+save(n3grams, file = "n3grams")
 
-n4grams <- merge(x = n4grams, y = n3grams, by.x = "history", by.y = "ngrams", all.x = TRUE)
+rm(n3grams)
 
-names(n4grams) <- c("history", "ngrams", "prefix", "history.suffix", "history.p.count", "count", "history.prefix")
+load("n4grams")
 
-n4grams <- n4grams[, c("ngrams", "prefix", "history.prefix", "history.suffix", "history.p.count")]
+temp <- n4grams$ngrams
+
+save(temp, file = "temp")
+
+rm(temp)
+
+n4grams <- n4grams[, c("count", "prefix")]
+
+gc()
+
+load("n4suffix")
+
+n4suffix <- as.character(tokens(x = n4suffix, what = "fastestword"))
+
+n4grams <- data.table(n4grams, ngrams = n4suffix)
+
+rm(n4suffix)
+
+gc()
+
+load("n3grams")
+
+n4grams <- left_join(x = n4grams, y = n3grams[, -c("count", "prefix")], by = "ngrams")
+    
+names(n4grams) <- c("count", "prefix", "ngrams", "history.suffix", "history.prefix")
+
+n4grams <- n4grams[, c("count", "prefix", "history.prefix", "history.suffix")]
+
+rm("n3grams")
+
+gc()
+
+load("temp")
+
+n4grams <- data.table(ngrams = temp, n4grams)
+
+rm(temp)
 
 save(n4grams, file = "n4grams")
 
 rm(n4grams)
 
 #################################N2 addon ####################################
-count <- n3grams[, -c("ngrams")]
 
-save(count, file = "count")
-
-rm(count)
+load("n3grams")
 
 ngrams <- n3grams$ngrams
 
-n3grams <- n3grams[count >=3, ]
+temp <- n3grams$prefix
 
-n3grams <- n3grams[, -c("count")]
+save(temp, file = "temp")
 
-save(n3grams, file = "n3grams")
+rm(temp)
 
 rm(n3grams)
 
@@ -1239,268 +894,71 @@ raw.4 <- getaddon(temp)
 
 rm(temp, ngrams)
 
-prefix <- paste(raw.1[[1]], raw.2[[1]], raw.3[[1]], raw.4[[1]], collapse = " ")
+n3prefix <- paste(raw.1[[1]], raw.2[[1]], raw.3[[1]], raw.4[[1]], collapse = " ")
 
-suffix <- paste(raw.1[[2]], raw.2[[2]], raw.3[[2]], raw.4[[2]], collapse = " ")
+n3suffix <- paste(raw.1[[2]], raw.2[[2]], raw.3[[2]], raw.4[[2]], collapse = " ")
 
 rm(raw.1, raw.2, raw.3, raw.4)
 
-save(prefix, file = "prefix")
+save(n3prefix, file = "n3prefix")
 
-save(suffix, file = "suffix")
+save(n3suffix, file = "n3suffix")
 
-rm(suffix)
+rm(n3suffix)
 
-load("count")
+prefix <- dfm(tokens(x = n3prefix, what = "fastestword"))
 
-prefix <- unlist(str_split(string = prefix, pattern = " "))
+prefix <- data.table(ngrams = as.character(colnames(prefix)), prefix = colSums(prefix))
 
-prefix <- data.table(ngrams = prefix, count = count$count, prefix = count$prefix)
+rm(n3prefix)
 
-rm(count)
+load("n3suffix")
 
-l <- length(prefix$count)
+suffix <- tokens(x = n3suffix, what = "fastestword")
 
-prefix.1 <- prefix[1 : round(l/2),]
+rm(n3suffix)
 
-prefix.2 <- prefix[(round(l/2)+1) : l,]
+history.prefix <- as.character(suffix)
 
-rm(prefix)
+suffix <- dfm(suffix)
 
-save(prefix.2, file = "prefix.2")
+suffix <- data.table(ngrams = as.character(colnames(suffix)), suffix = colSums(suffix))
 
-rm(prefix.2)
+n2addon <- merge(x = prefix, y = suffix, by = "ngrams", all = TRUE)
 
-gc()
-
-prefix.1 <- group_by(prefix.1, ngrams)
-
-prefix.1 <- summarise(prefix.1, count1 = sum(count <= 2 & prefix ==1), 
-                      count2 = sum(count <= 2 & prefix == 2 ), count3 = sum(count <= 2 & prefix == 3 ),
-                      "count4+" = sum(count >= 3))
-
-n1addon.1 <- data.table(ngrams = prefix.1$ngrams, prefix = prefix.1$count2 + prefix.1$count3*2)
-
-n1addon.1 <- n1addon.1[prefix != 0]
-
-save(n1addon.1, file = "n1addon.1")
-
-rm(n1addon.1)
-
-prefix.1$count2 <- prefix.1$count2 * 2
-
-prefix.1$count3 <- prefix.1$count3 * 3
-
-prefix.1 <- data.table(ngrams = prefix.1$ngrams, prefix = rowSums(prefix.1[, -1]))
-
-save(prefix.1, file = "prefix.1")
-
-rm(prefix.1)
-
-load("prefix.2")
-
-prefix.2 <- group_by(prefix.2, ngrams)
-
-prefix.2 <- summarise(prefix.2, count1 = sum(count <= 2 & prefix ==1), 
-                      count2 = sum(count <= 2 & prefix == 2 ), count3 = sum(count <= 2 & prefix == 3 ),
-                      "count4+" = sum(count >= 3))
-
-n1addon.2 <- data.table(ngrams = prefix.2$ngrams, prefix = prefix.2$count2 + prefix.2$count3*2)
-
-n1addon.2 <- n1addon.2[prefix != 0]
-
-save(n1addon.2, file = "n1addon.2")
-
-rm(n1addon.2)
-
-prefix.2$count2 <- prefix.2$count2 * 2
-
-prefix.2$count3 <- prefix.2$count3 * 3
-
-prefix.2 <- data.table(ngrams = prefix.2$ngrams, prefix = rowSums(prefix.2[, -1]))
-
-load("prefix.1")
-
-prefix.3 <- merge(x = prefix.1, y = prefix.2, by = "ngrams", all = TRUE)
-
-rm(prefix.1, prefix.2)
+rm(prefix, suffix)
 
 gc()
-
-prefix.3$prefix.x[is.na(prefix.3$prefix.x)] <- 0 
-
-prefix.3$prefix.y[is.na(prefix.3$prefix.y)] <- 0
-
-gc()
-
-prefix.3 <- data.table(ngrams = prefix.3$ngrams, prefix = rowSums(prefix.3[, -1]))
-
-save(prefix.3, file = "prefix.3")
-
-rm(prefix.3)
-
-load("suffix")
-
-load("count")
-
-suffix <- unlist(str_split(string = suffix, pattern = " "))
-
-suffix <- data.table(ngrams = suffix, count = count$count, prefix = count$prefix)
-
-rm(count)
-
-l <- length(suffix$count)
-
-suffix.1 <- suffix[1 : round(l/2),]
-
-suffix.2 <- suffix[(round(l/2)+1) : l,]
-
-rm(suffix)
-
-save(suffix.2, file = "suffix.2")
-
-rm(suffix.2)
-
-gc()
-
-suffix.1 <- group_by(suffix.1, ngrams)
-
-suffix.1 <-  summarise(suffix.1, count1 = sum(count <= 2 & prefix ==1), 
-                       count2 = sum(count <= 2 & prefix == 2 ), count3 = sum(count <= 2 & prefix == 3 ),
-                       "count4+" = sum(count >= 3))
-
-p.count <- suffix.1$count1 + suffix.1$count2*2 + suffix.1$count3*3
-
-suffix.1 <- data.table(ngrams = suffix.1$ngrams, suffix = rowSums(suffix.1[, -1]), p.count = p.count)
-
-save(suffix.1, file = "suffix.1")
-
-rm(suffix.1)
-
-load("suffix.2")
-
-suffix.2 <- group_by(suffix.2, ngrams)
-
-suffix.2 <-  summarise(suffix.2, count1 = sum(count <= 2 & prefix ==1), 
-                       count2 = sum(count <= 2 & prefix == 2 ), count3 = sum(count <= 2 & prefix == 3 ),
-                       "count4+" = sum(count >= 3))
-
-p.count <- suffix.2$count1 + suffix.2$count2*2 + suffix.2$count3*3
-
-suffix.2 <- data.table(ngrams = suffix.2$ngrams, suffix = rowSums(suffix.2[, -1]), p.count = p.count)
-
-rm(p.count)
-
-load("suffix.1")
-
-suffix.3 <- merge(x = suffix.1, y = suffix.2, by = "ngrams", all = TRUE)
-
-rm(suffix.1, suffix.2)
-
-suffix.3$suffix.x[is.na(suffix.3$suffix.x)] <- 0 
-
-suffix.3$suffix.y[is.na(suffix.3$suffix.y)] <- 0
-
-suffix.3$p.count.x[is.na(suffix.3$p.count.x)] <- 0
-
-suffix.3$p.count.y[is.na(suffix.3$p.count.y)] <- 0
-
-gc()
-
-suffix.3 <- data.table(ngrams = suffix.3$ngrams, suffix = rowSums(suffix.3[, .(suffix.x, suffix.y)]),
-                       p.count =  rowSums(suffix.3[, .(p.count.x, p.count.y)]))
-
-save(suffix.3, file = "suffix.3")
-
-rm(suffix.3)
-
-load("n2addon")
-
-load("prefix.3")
-
-n2addon <- merge(x = n2addon, y = prefix.3, by = "ngrams", all = TRUE)
-
-rm(prefix.3)
-
-n2addon$prefix.x[is.na(n2addon$prefix.x)] <- 0
-
-n2addon$prefix.y[is.na(n2addon$prefix.y)] <- 0
-
-n2addon <- data.table(ngrams = n2addon$ngrams, prefix = rowSums(n2addon[, -1]))
-
-load("suffix.3")
-
-n2addon <- merge(x = n2addon, y = suffix.3, by = "ngrams", all = TRUE)
-
-rm(suffix.3)
 
 n2addon$prefix[is.na(n2addon$prefix)] <- 0
 
 n2addon$suffix[is.na(n2addon$suffix)] <- 0
 
-n2addon$p.count[is.na(n2addon$p.count)] <- 0
+load("temp")
+
+history.prefix <- data.table(ngrams = history.prefix, history.prefix = temp)
+
+rm(temp)
+
+gc()
+
+history.prefix <- group_by(history.prefix, ngrams)
+
+history.prefix <- summarise(history.prefix, history.prefix = sum(history.prefix))
+
+n2addon <- merge(x = n2addon, y = history.prefix, by = "ngrams", all = TRUE)
+
+rm(history.prefix)
+
+n2addon$history.prefix[is.na(n2addon$history.prefix)] <- 0
 
 save(n2addon, file = "n2addon")
-
-rm(n2addon)
-
-load("n1addon.1")
-
-load("n1addon.2")
-
-n1addon.3 <- merge(x = n1addon.1, y = n1addon.2, by = "ngrams", all = TRUE)
-
-rm(n1addon.1, n1addon.2)
-
-n1addon.3$prefix.x[is.na(n1addon.3$prefix.x)] <- 0 
-
-n1addon.3$prefix.y[is.na(n1addon.3$prefix.y)] <- 0 
-
-n1addon.3 <- data.table(ngrams = n1addon.3$ngrams, prefix = rowSums(n1addon.3[, -1]))
-
-temp <- lapply(X = n1addon.3$ngrams, FUN = rmsuffix)
-
-n1addon.3$ngrams <- as.character(temp)
-
-rm(temp)
-
-n1addon.3 <- group_by(n1addon.3, ngrams)
-
-n1addon.3 <- data.table(summarise(n1addon.3, prefix = sum(prefix)))
-
-load("n1addon")
-
-n1addon <- merge(x = n1addon, y = n1addon.3, by = "ngrams", all = TRUE)
-
-n1addon$prefix.x[is.na(n1addon$prefix.x)] <- 0 
-
-n1addon$prefix.y[is.na(n1addon$prefix.y)] <- 0 
-
-n1addon <- data.table(ngrams = n1addon$ngrams, prefix = rowSums(n1addon[, -1]))
-
-save(n1addon, file = "n1addon")
-
-rm(n1addon, n1addon.3)
-
-load("n2addon")
-
-load("n3grams")
-
-temp <- history(n3grams$ngrams)
-
-n3grams <- data.table(n3grams, history = temp)
-
-rm(temp)
-
-n3grams <- merge(x = n3grams, y = n2addon[, c("ngrams", "suffix", "p.count")], by.x = "history", by.y = "ngrams", all.x = TRUE)
-
-names(n3grams) <- c("history", "ngrams", "prefix", "history.suffix", "history.p.count")
-
-n2addon <- n2addon[, c("ngrams", "prefix")]
 
 n2grams <- fread("backup/n2grams.csv")[, -1]
 
 n2grams <- merge(x = n2grams, y = n2addon, by = "ngrams", all = TRUE)
+
+rm("n2addon")
 
 z <- str_which(string = n2grams$ngrams, pattern = "^sss")
 
@@ -1508,13 +966,49 @@ n2grams$prefix[z] <- n2grams$count[z]
 
 rm(z)
 
-rm(n2addon)
+save(n2grams, file = "n2grams")
 
-n3grams <- merge(x = n3grams, y = n2grams, by.x = "history", by.y = "ngrams", all.x = TRUE)
+rm(n2grams)
 
-names(n3grams) <- c("history", "ngrams", "prefix", "history.suffix", "history.p.count", "count", "history.prefix")
+load("n3grams")
 
-n3grams <- n3grams[, c("ngrams", "prefix", "history.prefix", "history.suffix", "history.p.count")]
+temp <- n3grams$ngrams
+
+save(temp, file = "temp")
+
+rm(temp)
+
+n3grams <- n3grams[, c("count", "prefix")]
+
+gc()
+
+load("n3suffix")
+
+n3suffix <- as.character(tokens(x = n3suffix, what = "fastestword"))
+
+n3grams <- data.table(n3grams, ngrams = n3suffix)
+
+rm(n3suffix)
+
+gc()
+
+load("n2grams")
+
+n3grams <- left_join(x = n3grams, y = n2grams[, -c("count", "prefix")], by = "ngrams")
+
+names(n3grams) <- c("count", "prefix", "ngrams", "history.suffix", "history.prefix")
+
+n3grams <- n3grams[, c("count", "prefix", "history.prefix", "history.suffix")]
+
+rm("n2grams")
+
+gc()
+
+load("temp")
+
+n3grams <- data.table(ngrams = temp, n3grams)
+
+rm(temp)
 
 save(n3grams, file = "n3grams")
 
@@ -1522,19 +1016,15 @@ rm(n3grams)
 
 ################################# n1addon ####################################
 
-count <- n2grams[, -c("ngrams")]
-
-save(count, file = "count")
-
-rm(count)
+load("n2grams")
 
 ngrams <- n2grams$ngrams
 
-n2grams <- n2grams[count >=3, ]
+temp <- n2grams$prefix
 
-n2grams <- n2grams[, -c("count")]
+save(temp, file = "temp")
 
-save(n2grams, file = "n2grams")
+rm(temp)
 
 rm(n2grams)
 
@@ -1587,222 +1077,71 @@ raw.4 <- getaddon(temp)
 
 rm(temp, ngrams)
 
-prefix <- paste(raw.1[[1]], raw.2[[1]], raw.3[[1]], raw.4[[1]], collapse = " ")
+n2prefix <- paste(raw.1[[1]], raw.2[[1]], raw.3[[1]], raw.4[[1]], collapse = " ")
 
-suffix <- paste(raw.1[[2]], raw.2[[2]], raw.3[[2]], raw.4[[2]], collapse = " ")
+n2suffix <- paste(raw.1[[2]], raw.2[[2]], raw.3[[2]], raw.4[[2]], collapse = " ")
 
 rm(raw.1, raw.2, raw.3, raw.4)
 
-save(prefix, file = "prefix")
+save(n2prefix, file = "n2prefix")
 
-save(suffix, file = "suffix")
+save(n2suffix, file = "n2suffix")
 
-rm(suffix)
+rm(n2suffix)
 
-load("count")
+prefix <- dfm(tokens(x = n2prefix, what = "fastestword"))
 
-prefix <- unlist(str_split(string = prefix, pattern = " "))
+prefix <- data.table(ngrams = as.character(colnames(prefix)), prefix = colSums(prefix))
 
-prefix <- data.table(ngrams = prefix, count = count$count, prefix = count$prefix)
+rm(n2prefix)
 
-rm(count)
+load("n2suffix")
 
-l <- length(prefix$count)
+suffix <- tokens(x = n2suffix, what = "fastestword")
 
-prefix.1 <- prefix[1 : round(l/2),]
+rm(n2suffix)
 
-prefix.2 <- prefix[(round(l/2)+1) : l,]
+history.prefix <- as.character(suffix)
 
-rm(prefix)
+suffix <- dfm(suffix)
 
-save(prefix.2, file = "prefix.2")
+suffix <- data.table(ngrams = as.character(colnames(suffix)), suffix = colSums(suffix))
 
-rm(prefix.2)
+n1addon <- merge(x = prefix, y = suffix, by = "ngrams", all = TRUE)
 
-gc()
-
-prefix.1 <- group_by(prefix.1, ngrams)
-
-prefix.1 <- summarise(prefix.1, count1 = sum(count <= 2 & prefix ==1), 
-                      count2 = sum(count <= 2 & prefix == 2 ), count3 = sum(count <= 2 & prefix == 3 ),
-                      count4 = sum(count <= 2 & prefix == 4 ), count5 = sum(count <= 2 & prefix == 5 ),
-                      "count6+" = sum(count >= 3))
-
-prefix.1$count2 <- prefix.1$count2 * 2
-
-prefix.1$count3 <- prefix.1$count3 * 3
-
-prefix.1$count4 <- prefix.1$count4 * 4
-
-prefix.1$count5 <- prefix.1$count5 * 5
-
-prefix.1 <- data.table(ngrams = prefix.1$ngrams, prefix = rowSums(prefix.1[, -1]))
-
-save(prefix.1, file = "prefix.1")
-
-rm(prefix.1)
-
-load("prefix.2")
-
-prefix.2 <- group_by(prefix.2, ngrams)
-
-prefix.2 <- summarise(prefix.2, count1 = sum(count <= 2 & prefix ==1), 
-                      count2 = sum(count <= 2 & prefix == 2 ), count3 = sum(count <= 2 & prefix == 3 ),
-                      count4 = sum(count <= 2 & prefix == 4 ), count5 = sum(count <= 2 & prefix == 5 ),
-                      "count6+" = sum(count >= 3))
-
-prefix.2$count2 <- prefix.2$count2 * 2
-
-prefix.2$count3 <- prefix.2$count3 * 3
-
-prefix.2$count4 <- prefix.2$count4 * 4
-
-prefix.2$count5 <- prefix.2$count5 * 5
-
-prefix.2 <- data.table(ngrams = prefix.2$ngrams, prefix = rowSums(prefix.2[, -1]))
-
-load("prefix.1")
-
-prefix.3 <- merge(x = prefix.1, y = prefix.2, by = "ngrams", all = TRUE)
-
-rm(prefix.1, prefix.2)
+rm(prefix, suffix)
 
 gc()
-
-prefix.3$prefix.x[is.na(prefix.3$prefix.x)] <- 0 
-
-prefix.3$prefix.y[is.na(prefix.3$prefix.y)] <- 0
-
-gc()
-
-prefix.3 <- data.table(ngrams = prefix.3$ngrams, prefix = rowSums(prefix.3[, -1]))
-
-save(prefix.3, file = "prefix.3")
-
-rm(prefix.3)
-
-load("suffix")
-
-load("count")
-
-suffix <- unlist(str_split(string = suffix, pattern = " "))
-
-suffix <- data.table(ngrams = suffix, count = count$count, prefix = count$prefix)
-
-rm(count)
-
-l <- length(suffix$count)
-
-suffix.1 <- suffix[1 : round(l/2),]
-
-suffix.2 <- suffix[(round(l/2)+1) : l,]
-
-rm(suffix)
-
-save(suffix.2, file = "suffix.2")
-
-rm(suffix.2)
-
-gc()
-
-suffix.1 <- group_by(suffix.1, ngrams)
-
-suffix.1 <-  summarise(suffix.1, count1 = sum(count <= 2 & prefix ==1), 
-                       count2 = sum(count <= 2 & prefix == 2 ), count3 = sum(count <= 2 & prefix == 3 ),
-                       count4 = sum(count <= 2 & prefix == 4 ), count5 = sum(count <= 2 & prefix == 5 ),
-                       "count6+" = sum(count >= 3))
-
-p.count <- suffix.1$count1 + suffix.1$count2*2 + suffix.1$count3*3 + suffix.1$count4*4 + suffix.1$count5*5
-
-suffix.1 <- data.table(ngrams = suffix.1$ngrams, suffix = rowSums(suffix.1[, -1]), p.count = p.count)
-
-save(suffix.1, file = "suffix.1")
-
-rm(suffix.1)
-
-load("suffix.2")
-
-suffix.2 <- group_by(suffix.2, ngrams)
-
-suffix.2 <-  summarise(suffix.2, count1 = sum(count <= 2 & prefix ==1), 
-                       count2 = sum(count <= 2 & prefix == 2 ), count3 = sum(count <= 2 & prefix == 3 ),
-                       count4 = sum(count <= 2 & prefix == 4 ), count5 = sum(count <= 2 & prefix == 5 ),
-                       "count6+" = sum(count >= 3))
-
-p.count <- suffix.2$count1 + suffix.2$count2*2 + suffix.2$count3*3 + suffix.2$count4*4 + suffix.2$count5*5
-
-suffix.2 <- data.table(ngrams = suffix.2$ngrams, suffix = rowSums(suffix.2[, -1]), p.count = p.count)
-
-rm(p.count)
-
-load("suffix.1")
-
-suffix.3 <- merge(x = suffix.1, y = suffix.2, by = "ngrams", all = TRUE)
-
-rm(suffix.1, suffix.2)
-
-suffix.3$suffix.x[is.na(suffix.3$suffix.x)] <- 0 
-
-suffix.3$suffix.y[is.na(suffix.3$suffix.y)] <- 0
-
-suffix.3$p.count.x[is.na(suffix.3$p.count.x)] <- 0
-
-suffix.3$p.count.y[is.na(suffix.3$p.count.y)] <- 0
-
-gc()
-
-suffix.3 <- data.table(ngrams = suffix.3$ngrams, suffix = rowSums(suffix.3[, .(suffix.x, suffix.y)]),
-                       p.count =  rowSums(suffix.3[, .(p.count.x, p.count.y)]))
-
-save(suffix.3, file = "suffix.3")
-
-rm(suffix.3)
-
-load("n1addon")
-
-load("prefix.3")
-
-n1addon <- merge(x = n1addon, y = prefix.3, by = "ngrams", all = TRUE)
-
-rm(prefix.3)
-
-n1addon$prefix.x[is.na(n1addon$prefix.x)] <- 0
-
-n1addon$prefix.y[is.na(n1addon$prefix.y)] <- 0
-
-n1addon <- data.table(ngrams = n1addon$ngrams, prefix = rowSums(n1addon[, -1]))
-
-load("suffix.3")
-
-n1addon <- merge(x = n1addon, y = suffix.3, by = "ngrams", all = TRUE)
-
-rm(suffix.3)
 
 n1addon$prefix[is.na(n1addon$prefix)] <- 0
 
 n1addon$suffix[is.na(n1addon$suffix)] <- 0
 
-n1addon$p.count[is.na(n1addon$p.count)] <- 0
+load("temp")
 
-save(n1addon, file = "n1addon")
-
-load("n2grams")
-
-temp <- history(n2grams$ngrams)
-
-n2grams <- data.table(n2grams, history = temp)
+history.prefix <- data.table(ngrams = history.prefix, history.prefix = temp)
 
 rm(temp)
 
-n2grams <- merge(x = n2grams, y = n1addon[, c("ngrams", "suffix", "p.count")], by.x = "history", by.y = "ngrams", all.x = TRUE)
+gc()
 
-names(n2grams) <- c("history", "ngrams", "prefix", "history.suffix", "history.p.count")
+history.prefix <- group_by(history.prefix, ngrams)
 
-n1addon <- n1addon[, c("ngrams", "prefix")]
+history.prefix <- summarise(history.prefix, history.prefix = sum(history.prefix))
+
+n1addon <- merge(x = n1addon, y = history.prefix, by = "ngrams", all = TRUE)
+
+rm(history.prefix)
+
+n1addon$history.prefix[is.na(n1addon$history.prefix)] <- 0
+
+save(n1addon, file = "n1addon")
 
 n1grams <- fread("backup/n1grams.csv")[, -1]
 
 n1grams <- merge(x = n1grams, y = n1addon, by = "ngrams", all = TRUE)
+
+rm("n1addon")
 
 z <- str_which(string = n1grams$ngrams, pattern = "^sss")
 
@@ -1810,21 +1149,56 @@ n1grams$prefix[z] <- n1grams$count[z]
 
 rm(z)
 
-rm(n1addon)
+save(n1grams, file = "n1grams")
 
-n2grams <- merge(x = n2grams, y = n1grams[, c("ngrams", "prefix")], by.x = "history", by.y = "ngrams", all.x = TRUE)
+rm(n1grams)
 
-names(n2grams) <- c("history", "ngrams", "prefix", "history.suffix", "history.p.count", "history.prefix")
+load("n2grams")
 
-n2grams <- n2grams[, c("ngrams", "prefix", "history.prefix", "history.suffix", "history.p.count")]
+temp <- n2grams$ngrams
+
+save(temp, file = "temp")
+
+rm(temp)
+
+n2grams <- n2grams[, c("count", "prefix")]
+
+gc()
+
+load("n2suffix")
+
+n2suffix <- as.character(tokens(x = n2suffix, what = "fastestword"))
+
+n2grams <- data.table(n2grams, ngrams = n2suffix)
+
+rm(n2suffix)
+
+gc()
+
+load("n1grams")
+
+n2grams <- left_join(x = n2grams, y = n1grams[, -c("count", "prefix", "words")], by = "ngrams")
+
+names(n2grams) <- c("count", "prefix", "ngrams", "history.suffix", "history.prefix")
+
+n2grams <- n2grams[, c("count", "prefix", "history.prefix", "history.suffix")]
+
+rm("n1grams")
+
+gc()
+
+load("temp")
+
+n2grams <- data.table(ngrams = temp, n2grams)
+
+rm(temp)
 
 save(n2grams, file = "n2grams")
 
-rm(n2grams)
-
-save(n1grams, file = "n1grams")
-
 ############################## N1 Probability ##################################
+load("n1grams")
+
+n1grams <- n1grams[, -c("count")]
 
 z <- str_which(string = n1grams$ngrams, pattern = "eee")
 
@@ -1832,122 +1206,480 @@ n1grams <- n1grams[-z]
 
 rm(z)
 
-prob <- n1grams$prefix/sum(n1grams$prefix)
+getprob.n1 <- function(data){
+    
+    prefix.all <- sum(n2grams$prefix)
+    
+    suffix.all <- sum(data$suffix)
+    
+    V <- dim(data)[1]
+    
+    result <- lapply(X = data$prefix, FUN = function(x){
+        
+        (x - D1) / prefix.all + D1 * suffix.all / prefix.all/ V
+        
+    })
+    
+    unlist(result)
+    
+}
+
+prob <- getprob.n1(n1grams)
 
 n1grams <- cbind(n1grams, prob)
+
+rm(prob)
 
 save(n1grams, file = "n1grams")
 
 ############################## N2 Probability ##################################
+load("n2grams")
 
-backoff <- function(data) {
-    
-    cl <- makeCluster(detectCores()-1)
-    
-    l <- length(data)
-    
-    data <- list(data[1 : round(l/3)], 
-                 data[(round(l/3)+1) : round(l*2/3)], 
-                 data[(round(l*2/3)+1) : l])
-    
-    clusterExport(cl =cl, varlist = c("data", "rmprefix"))
-    
-    clusterEvalQ(cl = cl, expr = library(stringr))
-    
-    backoff <- parLapply(cl = cl, X = data, fun = function(x){
-        
-        lapply(X = x, FUN = rmprefix)
-        
-    })
-    
-    stopCluster(cl)
-    
-    as.character(unlist(backoff))
-}
+temp <- n2grams[, c(1, 2)]
 
-temp <- backoff(n2grams$ngrams)
-
-n2grams <- data.table(n2grams, backoff = temp)
+save(temp, file = "temp")
 
 rm(temp)
 
-n2grams <- merge(x = n2grams, y = n1grams[, .(ngrams, prob)], by.x = "backoff", 
-                 by.y = "ngrams", all.x = TRUE)
+n2grams <- n2grams[, -c(1, 2)]
 
-n2grams <- n2grams[, -c("backoff")]
+load("n2prefix")
 
-names(n2grams) <- c("ngrams", "prefix", "history.prefix", "history.suffix", 
-                    "history.p.count", "backoff.prob")
+n2prefix <- as.character(tokens(x = n2prefix, what = "fastestword"))
 
-getprob.1 <- function(data, D){
-    
-    data <- data[, -c("ngrams")]
+n2grams <- data.table(ngrams = n2prefix, n2grams)
+
+rm(n2prefix)
+
+n2grams <- left_join(x = n2grams, y = n1grams[, c("ngrams", "prob")], by = "ngrams")
+
+rm(n1grams)
+
+n2grams <- n2grams[, -1]
+
+names(n2grams) <- c("prefix", "history.prefix", "history.suffix", "backoff.prob")
+
+getprob <- function(data, D){
     
     cl <- makeCluster(detectCores()-1)
     
+    on.exit(stopCluster(cl))
+    
     clusterExport(cl = cl, varlist = c("data", "D2", "D3", "D4", "D5"))
     
-    result <- parApply(cl = cl, X = data, MARGIN = 1, FUN = function(x){
+    result <- parApply(cl = cl, X = data, MARGIN = 1, FUN = function(i){
         
-        prefix <- x[1]
+        (i[[1]] - D) / i[[2]] + D * i[[3]] / i[[2]] * i[[4]]
         
-        history.prefix <- x[2]
-        
-        history.suffix <- x[3]
-        
-        history.p.count <- x[4]
-        
-        backoff.prob <- x[5]
-        
-        (prefix - D) / history.prefix + (D * history.suffix + history.p.count) / history.prefix * backoff.prob
-        
-    })
+        })
     
-    stopCluster(cl)
-    
-    result
+    as.numeric(result)
 }
 
-prob <- getprob.1(n2grams, D2)
+prob <- getprob(n2grams, D2)
 
 n2grams <- cbind(n2grams, prob)
 
-n2grams <- n2grams[-(ngrams == "ssssss")]
+rm(prob)
+
+load("temp")
+
+n2grams <- data.table(temp, n2grams)
+
+save(n2grams, file = "n2grams")
+
+rm(temp)
 
 ############################## N3 Probability ##################################
 load("n3grams")
 
-temp <- backoff(n3grams$ngrams)
+temp <- n3grams[, c(1,2)]
 
-n3grams <- data.table(n3grams, backoff = temp)
+save(temp, file = "temp")
 
 rm(temp)
 
-n3grams <- merge(x = n3grams, y = n2grams[, .(ngrams, prob)], by.x = "backoff", 
-                 by.y = "ngrams", all.x = TRUE)
+n3grams <- n3grams[, - c(1,2)]
 
-n3grams <- n3grams[, -c("backoff")]
+load("n3prefix")
 
-names(n3grams) <- c("ngrams", "prefix", "history.prefix", "history.suffix", 
-                    "history.p.count", "backoff.prob")
+n3prefix <- as.character(tokens(x = n3prefix, what = "fastestword"))
 
-n3grams$backoff.prob[is.na(n3grams$backoff.prob)] <- 0 
+n3grams <- data.table(ngrams = n3prefix, n3grams)
 
-prob <- getprob.1(n3grams, D3)
+rm(n3prefix)
+
+n3grams <- left_join(x = n3grams, y = n2grams[, c("ngrams", "prob")], by = "ngrams")
+
+rm(n2grams)
+
+n3grams <- n3grams[, -1]
+
+names(n3grams) <- c("prefix", "history.prefix", "history.suffix", "backoff.prob")
+
+l <- length(n3grams$prefix)
+
+prob1 <- getprob(n3grams[1 : round(l/3),], D3)
+
+prob2 <- getprob(n3grams[(round(l/3) + 1) : round(l/3*2),], D3)
+
+prob3 <- getprob(n3grams[(round(l/3*2) + 1) : l,], D3)
+
+prob <- c(prob1, prob2, prob3)
+
+rm(prob1, prob2, prob3)
 
 n3grams <- cbind(n3grams, prob)
 
-############################## N4 Probability ##################################
+rm(prob)
 
+load("temp")
+
+n3grams <- data.table(temp, n3grams)
+
+rm(temp)
+
+save(n3grams, file = "n3grams")
+############################## N4 Probability ##################################
+n3grams <- n3grams[, c("ngrams", "prob")]
+
+load("n4grams")
+
+temp <- n4grams[, c(1,2)]
+
+save(temp, file = "temp")
+
+rm(temp)
+
+gc()
+
+n4grams <- n4grams[, - c(1,2)]
+
+load("n4prefix")
+
+n4prefix <- as.character(tokens(x = n4prefix, what = "fastestword"))
+
+n4grams <- data.table(ngrams = n4prefix, n4grams)
+
+rm(n4prefix)
+
+n4grams <- left_join(x = n4grams, y = n3grams, by = "ngrams")
+
+rm(n3grams)
+
+n4grams <- n4grams[, -1]
+
+names(n4grams) <- c("prefix", "history.prefix", "history.suffix", "backoff.prob")
+
+gc()
+
+l <- length(n4grams$prefix)
+
+prob1 <- getprob(n4grams[1 : round(l/3),], D4)
+
+prob2 <- getprob(n4grams[(round(l/3) + 1) : round(l/3*2),], D4)
+
+prob3 <- getprob(n4grams[(round(l/3*2) + 1) : l,], D4)
+
+prob <- c(prob1, prob2, prob3)
+
+rm(prob1, prob2, prob3)
+
+n4grams <- data.table(n4grams, prob = prob)
+
+rm(prob)
+
+gc()
+
+load("temp")
+
+temp <- data.table(temp, n4grams[, c(4,5)])
+
+n4grams <- temp
+
+rm(temp)
+
+save(n4grams, file = "n4grams")
+
+##################################### N5 Probability ###################################
+n4grams <- n4grams[, c("ngrams", "prob")]
+
+load("n5grams")
+
+temp <- n5grams[, 1]
+
+save(temp, file = "temp")
+
+rm(temp)
+
+n5grams <- n5grams[, - 1]
+
+gc()
+
+load("n5prefix")
+
+n5prefix <- as.character(tokens(x = n5prefix, what = "fastestword"))
+
+n5grams <- data.table(ngrams = n5prefix, n5grams)
+
+rm(n5prefix)
+
+n5grams <- left_join(x = n5grams, y = n4grams, by = "ngrams")
+
+rm(n4grams)
+
+n5grams <- n5grams[, -1]
+
+names(n5grams) <- c("count", "history.count", "history.suffix", "backoff.prob")
+
+gc()
+
+l <- length(n5grams$count)
+
+prob1 <- getprob(n5grams[1 : round(l/4),], D5)
+
+prob2 <- getprob(n5grams[(round(l/4) + 1) : round(l/4*2),], D5)
+
+prob3 <- getprob(n5grams[(round(l/4*2) + 1) : round(l/4*3),], D5)
+
+prob4 <- getprob(n5grams[(round(l/4*3) + 1) : l,], D5)
+
+prob <- c(prob1, prob2, prob3, prob4)
+
+rm(prob1, prob2, prob3, prob4)
+
+n5grams <- data.table(n5grams, prob = prob)
+
+rm(prob)
+
+gc()
+
+load("temp")
+
+temp <- data.table(temp, n5grams[, c(1, 4, 5)])
+
+n5grams <- temp
+
+rm(temp)
+
+n5grams <- n5grams[-str_which(n5grams$ngrams, "s{15}"), ]
+
+save(n5grams, file = "n5grams")
+
+################################# Prune N5 #############################################
+
+temp <- n5grams$count
+
+rm(n5grams)
+
+temp <- data.table(table(temp))
+
+names(temp) <- c("r", "Nr")
+
+temp$r <- as.numeric(temp$r)
+
+gt.count <- function(data){
+    
+    Zr <- sapply(X = 2 : (dim(data)[1] - 1), FUN = function(i){
+        
+        data$Nr[i] / (0.5 * (data$r[i+1]-data$r[i-1]))
+        
+    })
+    
+    last <- data$Nr[dim(data)[1]]/(0.5 * data$r[dim(data)[1]])
+    
+    Zr <- c(data$Nr[1], Zr, last)
+    
+    data <- data.table(data, Zr = Zr)
+    
+    fit <- lm(formula = log10(Zr) ~ log10(r), data = data)
+    
+    r <- 1 : (max(data$r)+1)
+    
+    data <- merge(x = data, y = data.table(r), by = "r", all = TRUE)
+    
+    data$Nr[is.na(data$Nr)] <- 0 
+    
+    data$Zr[is.na(data$Zr)] <- 0 
+    
+    smooth <- predict(fit, newdata = data.table(r = r))
+    
+    smooth <- 10^as.numeric(smooth)
+    
+    data <- data.table(data, smooth = smooth)
+    
+    gt.count <- as.numeric(lapply(X = 1 : dim(data)[1], FUN = function(i){
+        
+        (data$r[i]+1)*data$Nr[i+1]/data$Nr[i]
+        
+    }))
+    
+    sgt.count <- as.numeric(lapply(X = 1 : dim(data)[1], FUN = function(i){
+        
+        (data$r[i] + 1) * data$smooth[i+1] / data$smooth[i]
+        
+    }))
+    
+    gt.var <- as.numeric(lapply(X = 1 : dim(data)[1], FUN = function(i){
+        
+        (data$r[i]+1)^2 * data$Nr[i+1] / data$Nr[i]^2 * (1 + data$Nr[i+1] / data$Nr[i])
+        
+    }))
+    
+    data <- data.table(data, gt.count = gt.count, sgt.count = sgt.count, gt.var = gt.var)
+    
+    for(i in 1 : dim(data)[1]){
+        
+        if(abs(data$gt.count[i] - data$sgt.count[i]) <= 1.65*sqrt(data$gt.var[i])) {q <- i; break}
+        
+    }
+    
+    final.count <- c(data$gt.count[1 : (q-1)], data$sgt.count[q : dim(data)[1]]) 
+    
+    data.table(count = data$r, sgt.count = final.count)
+}
+
+temp <- gt.count(temp)
+
+load("n5grams")
+
+n5grams <- left_join(x = n5grams, y = temp, by = "count")
+
+rm(temp)
+
+wdf <- n5grams$sgt.count * (log(n5grams$prob) - log(n5grams$backoff.prob))
+
+n5grams <- n5grams[, c("ngrams", "prob")]
+
+n5grams <- data.table(n5grams)
+
+gc()
+
+n5grams <- n5grams[wdf >= 0.12 ,]
+
+save(n5grams, file = "n5grams-final")
+
+rm(n5grams, wdf)
+############################## Prune N4 ################################################
+
+load("n4grams")
+
+temp <- n4grams$count
+
+rm(n4grams)
+
+temp <- data.table(table(temp))
+
+names(temp) <- c("r", "Nr")
+
+temp$r <- as.numeric(temp$r)
+
+temp <- gt.count(temp)
+
+load("n4grams")
+
+n4grams <- left_join(x = n4grams, y = temp, by = "count")
+
+rm(temp)
+
+wdf <- n4grams$sgt.count * (log(n4grams$prob) - log(n4grams$backoff.prob))
+
+n4grams <- n4grams[, c("ngrams", "prob")]
+
+n4grams <- data.table(n4grams)
+
+gc()
+
+n4grams <- n4grams[wdf >= 0.53 ,]
+
+save(n4grams, file = "n4grams-final")
+
+rm(n4grams, wdf)
+
+############################## Prune N3 ################################################
+
+load("n3grams")
+
+temp <- n3grams$count
+
+rm(n3grams)
+
+temp <- data.table(table(temp))
+
+names(temp) <- c("r", "Nr")
+
+temp$r <- as.numeric(temp$r)
+
+temp <- gt.count(temp)
+
+load("n3grams")
+
+n3grams <- left_join(x = n3grams, y = temp, by = "count")
+
+rm(temp)
+
+wdf <- n3grams$sgt.count * (log(n3grams$prob) - log(n3grams$backoff.prob))
+
+n3grams <- n3grams[, c("ngrams", "prob")]
+
+n3grams <- data.table(n3grams)
+
+gc()
+
+n3grams <- n3grams[wdf >= 2 ,]
+
+save(n3grams, file = "n3grams-final")
+
+rm(n3grams, wdf)
+
+############################## Prune N2 ################################################
+
+load("n2grams")
+
+temp <- n2grams$count
+
+rm(n2grams)
+
+temp <- data.table(table(temp))
+
+names(temp) <- c("r", "Nr")
+
+temp$r <- as.numeric(temp$r)
+
+temp <- gt.count(temp)
+
+load("n2grams")
+
+n2grams <- left_join(x = n2grams, y = temp, by = "count")
+
+rm(temp)
+
+wdf <- n2grams$sgt.count * (log(n2grams$prob) - log(n2grams$backoff.prob))
+
+n2grams <- n2grams[, c("ngrams", "prob")]
+
+n2grams <- data.table(n2grams)
+
+gc()
+
+n2grams <- n2grams[wdf >= 14.5 ,]
+
+save(n2grams, file = "n2grams-final")
+
+rm(wdf)
 
 ############################## Calculating Perplexity ##################################
-n1grams <- n1grams[, c(1, 5)]
+load("n1grams")
 
-n2grams <- n2grams[, c(1, 5)]
+n1grams <- n1grams[, c("ngrams", "words", "prob")]
 
-n3grams <- n3grams[, c(1, 7, 8)]
+save(n1grams, file = "n1grams-final")
 
-n4grams <- n4grams[, c(1, 5, 6)]
+load("n3grams-final")
+
+load("n4grams-final")
+
+load("n5grams-final")
 
 
 write.csv(n1grams, "n1grams.csv")
