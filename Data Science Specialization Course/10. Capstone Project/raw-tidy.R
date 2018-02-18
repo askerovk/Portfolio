@@ -2,6 +2,8 @@ URL <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-Swift
 
 download.file(url = URL, destfile = "swift.zip", method = "libcurl")
 
+rm(URL)
+
 unzip(zipfile = "swift.zip")
 
 library(quanteda)
@@ -44,8 +46,6 @@ rm(fun1)
 source <- c(rep(1, length(tok.s[[1]][[1]])), 
             rep(2, length(tok.s[[2]][[1]])), 
             rep(3, length(tok.s[[3]][[1]])))
-
-
 
 tok.s <- c(tok.s[[1]][[1]], tok.s[[2]][[1]], tok.s[[3]][[1]])
 
@@ -1669,9 +1669,11 @@ save(n2grams, file = "n2grams-final")
 rm(wdf)
 
 ############################## Calculating Perplexity ##################################
-load("n1grams")
+load("n1grams-final")
 
 n1grams <- n1grams[, c("ngrams", "words", "prob")]
+
+n1grams[ngrams == "sss",]$words <- "sss"
 
 save(n1grams, file = "n1grams-final")
 
@@ -1681,149 +1683,116 @@ load("n4grams-final")
 
 load("n5grams-final")
 
+n1grams <- n1grams[order(prob, decreasing = TRUE)]
 
-write.csv(n1grams, "n1grams.csv")
+n2grams <- n2grams[order(prob, decreasing = TRUE)]
 
-write.csv(n2grams, "n2grams.csv")
+n3grams <- n3grams[order(prob, decreasing = TRUE)]
 
-write.csv(n3grams, "n3grams.csv")
+n4grams <- n4grams[order(prob, decreasing = TRUE)]
 
-write.csv(n3grams, "n4grams.csv")
+n5grams <- n5grams[order(prob, decreasing = TRUE)]
 
+save(n1grams, file = "n1grams-final")
 
-test <- read_lines("test.txt", locale = locale(encoding = "UTF-8"), n_max = 1000)
+save(n2grams, file = "n2grams-final")
+
+save(n3grams, file = "n3grams-final")
+
+save(n4grams, file = "n4grams-final")
+
+save(n5grams, file = "n5grams-final")
+
+test <- read_lines("test.txt", locale = locale(encoding = "UTF-8"), n_max = 100000)
 
 test<- as.character(lapply(1:length(test), function(i){
     
-    paste(test[i], "zzzzendzzzz")
+    paste("sss sss sss sss", test[i])
     
 }))
 
 test <- tokens(x = test, what = "word", remove_numbers = TRUE, 
                remove_punct = TRUE, remove_twitter = TRUE, remove_hyphens = TRUE, remove_url = TRUE)
 
-test <- as.character(test)
-
-l <- length(test)
-
-list1 <- list(test[1 : round(l/3)], test[round(l/3+1) : round(l/3*2)], test[round(l/3*2+1) : l])
-
-vocab <- c(n1grams$ngrams, "zzzzendzzzz")
+test <- as.list(test)
 
 cl<-makeCluster(detectCores()-1)
 
-clusterExport(cl, c("list1", "vocab"))
+clusterExport(cl, c("test", "n1grams"))
 
-test <- parLapply(cl = cl, X = list1, fun = function(x){
+clusterEvalQ(cl = cl, expr = c(library(stringr), library(data.table), library(quanteda)))
+
+test <- parLapply(cl = cl, X = test, fun = function(x){
     
-    lapply(1:length(x), function(i){
+    as.character(lapply(X = x, FUN = function(i){
         
-        if(x[i] %in% vocab) {} 
+        temp <- n1grams[words == i, ngrams]
         
-        else{x[i] <<- "#@unk@#"}
+        if(length(temp) == 0) {temp <- "zzz"}
         
+        temp
+        }))
     })
+
+ngrams <- parLapply(cl = cl, X = test, fun = function(x){
     
-    x
+    as.character(tokens(x = paste(x, collapse = " "), what = "fastestword", concatenator = "", ngrams = 5L))
     
 })
 
 stopCluster(cl)
 
-rm(list1, vocab)
-
-test <- unlist(c(test[[1]], test[[2]], test[[3]]))
-
-test <- paste(test, collapse = " ")
-
-test <- str_split(string = test, pattern = "zzzzendzzzz")[[1]]
-
-test <- test[-str_which(string = test, pattern = "^\\s$")]
-
 ngram.prob <- function(x) {
     
-    prob <-  n4grams[n4grams$ngrams == x, ]$prob
+    prob <- n5grams[ngrams == x, prob]
     
     if(length(prob) == 0) {
         
-        n3 <- rmprefix(x)
+        x <- rmprefix(x)
         
-        prob <- n3grams[n3grams$ngrams == n3, ]$prob
+        prob <- n4grams[ngrams == x, prob]
         
         if(length(prob) == 0) {
             
-            n2 <- rmprefix(n3)
+            x <- rmprefix(x)
             
-            prob <- n2grams[n2grams$ngrams == n2, ]$prob
+            prob <- n3grams[ngrams == x, prob]
             
             if(length(prob) == 0) {
                 
-                n1 <- rmprefix(n2)
+                x <- rmprefix(x)
                 
-                prob <- n1grams[n1grams$ngrams == n1, ]$prob
+                prob <- n2grams[ngrams == x, prob]
+                
+                if(length(prob) == 0) {
+                    
+                    x <- rmprefix(x)
+                    
+                    prob <- n1grams[ngrams == x, prob]       
+                    
+                }
+                
             }
         }
-        
     }
-    
     prob
 }
-
-test <- as.character(lapply(X = test, function(x){
-    
-    paste("#@str@# #@str@# #@str@#", x)
-    
-}))
-
-l <- length(test)
-
-list1 <- list(test[1 : round(l/3)], test[round(l/3+1) : round(l/3*2)], test[round(l/3*2+1) : l])
 
 cl<-makeCluster(detectCores()-1)
 
 clusterEvalQ(cl, c(library(stringr), library(quanteda)))
 
-clusterExport(cl, c("list1", "n1grams", "n2grams", "n3grams", "n4grams", "ngram.prob", "rmprefix"))
+clusterExport(cl, c("ngrams", "n1grams", "n2grams", "n3grams", "n4grams", "n5grams", "ngram.prob", "rmprefix"))
 
-prob.test <- parLapply(cl = cl, X = list1, fun = function(x){
+prob.test <- parLapply(cl = cl, X = ngrams, fun = function(x){
     
-    lapply(X = x, function(y){
-        
-        temp <- as.character(tokens(x = y, what = "word", ngrams = 4L))
-        
-        temp <- as.numeric(lapply(X = temp, FUN = ngram.prob))
-        
-        prod(temp)
-    })
-    
+   temp <- as.numeric(lapply(X = x, FUN = ngram.prob))
+   
+   sum(log(temp, 2))
 })
 
 stopCluster(cl)
 
-prob.test <- as.numeric(c(prob.test[[1]], prob.test[[2]], prob.test[[3]]))
+prob.test <- as.numeric(prob.test)
 
-nngrams <- length(as.character(tokens(x = test[1:round(l)], what = "word", ngrams = 4L)))
-
-perlexity <- 2^(sum(log(prob.test, 2))/(-nngrams))
-
-predict <- function(x){
-    
-    temp <- as.character(tokens(x = char_tolower(x), what = "word", remove_numbers = TRUE, 
-                                remove_punct = TRUE, remove_twitter = TRUE, remove_hyphens = TRUE, remove_url = TRUE))
-    
-    if(length(temp) < 2) {temp <- paste("#@str@#", x)}
-    
-    if(length(temp) < 2) {temp <- paste("#@str@#", x)}
-    
-    temp <- as.character(tokens(x = x, what = "word", remove_numbers = TRUE, 
-                   remove_punct = TRUE, remove_twitter = TRUE, remove_hyphens = TRUE, remove_url = TRUE, ngrams = 2L))
-    
-    search <- paste("^", temp[length(temp)], sep = "")
-    
-    predn3 <- n3grams[str_which(string = n3grams$ngrams, pattern = search),]
-    
-    predn3 <- predn3[tail(order(predn3$prob)),]
-    
-    
-}
-
+2^-(sum(prob.test)/length(unlist(ngrams)))

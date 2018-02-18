@@ -1,0 +1,13 @@
+name: Fourgrams
+title: Fourgrams
+username:
+account: askerovk
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 243303
+bundleId: 1111827
+url: https://askerovk.shinyapps.io/Fourgrams/
+when: 1512301664.93072
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|Preliminary_Report.html|raw-tidy.R|test.R|WIP.R|Backup/n1grams.csv|Backup/n2grams.csv|Backup/n3grams.csv|final|Preliminary_Report_cache

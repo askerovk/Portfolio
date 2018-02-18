@@ -80,9 +80,7 @@ shinyServer(function(input, output, session) {
         
         temp <- paste("^", tail(temp, 1), sep = "")
         
-        temp <- n5grams[str_which(string = n5grams$ngrams, pattern = temp), ]
-        
-        temp <- temp[order(-temp$prob),]
+        temp <- n5grams[str_detect(string = ngrams, pattern = temp), prob]
         
         temp <- head(temp$ngrams, 15)
         
@@ -98,9 +96,7 @@ shinyServer(function(input, output, session) {
             
             temp <- paste("^", tail(temp, 1), sep = "")
             
-            temp <- n4grams[str_which(string = n4grams$ngrams, pattern = temp), ]
-            
-            temp <- temp[order(-temp$prob), ]
+            temp <- n4grams[str_detect(string = ngrams, pattern = temp), prob]
             
             temp <- head(temp$ngrams, 15)
             
@@ -118,9 +114,7 @@ shinyServer(function(input, output, session) {
                 
                 temp <- paste("^", tail(temp, 1), sep = "")
                 
-                temp <- n3grams[str_which(string = n3grams$ngrams, pattern = temp), ]
-                
-                temp <- temp[order(-temp$prob),]
+                temp <- n3grams[str_detect(string = ngrams, pattern = temp), prob]
                 
                 temp <- head(temp$ngrams, 15)
                 
@@ -138,9 +132,7 @@ shinyServer(function(input, output, session) {
                     
                     temp <- paste("^", tail(temp, 1), sep = "")
                     
-                    temp <- n3grams[str_which(string = n2grams$ngrams, pattern = temp), ]
-                    
-                    temp <- temp[order(-temp$prob),]
+                    temp <- n2grams[str_detect(string = ngrams, pattern = temp), prob]
                     
                     temp <- head(temp$ngrams, 15)
                     
