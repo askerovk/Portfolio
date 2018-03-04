@@ -13,18 +13,11 @@ library(readr)
 library(data.table)
 library(stringr)
 library(gtools)
-
-dir.us<-paste(getwd(), "/final/en_US", sep = "")
-
-setwd(dir.us)
-
-rm(dir.us)
+library(dplyr)
 
 fun1<- function(x){
     
-    read_lines(x, locale = locale(encoding = "UTF-8")) %>% paste(sep = "", collapse = "") ->y ##Because some files read only halfway. 
-    
-    y
+    read_lines(x, locale = locale(encoding = "UTF-8")) %>% paste(sep = "", collapse = "")  ##Because some files read only halfway. 
 }
 
 cl<-makeCluster(detectCores()-1)
@@ -33,7 +26,8 @@ clusterEvalQ(cl, c(library(readr), library(quanteda), library(dplyr)))
 
 clusterExport(cl, "fun1")
 
-tok.s <- parLapply(cl = cl, X = c("en_US.blogs.txt", "en_US.news.txt", "en_US.twitter.txt"), fun = fun1)
+tok.s <- parLapply(cl = cl, X = c("~/final/en_US/en_US.blogs.txt", "~/final/en_US/en_US.news.txt", 
+                                  "~/final/en_US/en_US.twitter.txt"), fun = fun1)
 
 tok.s <- parLapply(cl = cl, X = tok.s, fun = tokens, what = "sentence")
 
