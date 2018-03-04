@@ -1,4 +1,4 @@
-## Data Science Course : Capstone Project.
+## Data Science Specialization Course : Capstone Project.
 
 Contents:
 * Full project write-up is available as "Capstone_Project_Report.pdf" or "Capstone_Project_Report.Rmd"
