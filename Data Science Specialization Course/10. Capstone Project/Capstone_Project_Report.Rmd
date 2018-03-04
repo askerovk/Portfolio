@@ -5,7 +5,7 @@ output:
     citation_package: biblatex
     fig_caption: true
     latex_engine: pdflatex
-    template: C:\Users\User\Documents\Portfolio\Data Science Specialization Course\10. Capstone Project\svm-latex-ms.tex
+    template: svm-latex-ms.tex
     toc: true
 title: "Data Science Specialization Course:"
 subtitle: "Capstone Project Report"
