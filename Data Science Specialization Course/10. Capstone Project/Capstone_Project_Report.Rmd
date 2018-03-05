@@ -5,7 +5,7 @@ output:
     citation_package: biblatex
     fig_caption: true
     latex_engine: pdflatex
-    template: svm-latex-ms.tex
+    template: C:\Users\User\Documents\Portfolio\Data Science Specialization Course\10. Capstone Project\svm-latex-ms.tex
     toc: true
 title: "Data Science Specialization Course:"
 subtitle: "Capstone Project Report"
@@ -1382,7 +1382,9 @@ shinyServer(function(input, output, session) {
         
         ## Individual words are encoded
         
-        text <- as.character(lapply(X = 1 : length(text), FUN = function(i){
+        l <- if(length(text) > 0) {length(text)} else{1}
+        
+        text <- as.character(lapply(X = 1 : l, FUN = function(i){
             
             t <- paste("^", text[i], "$", sep = "")
             
@@ -1393,6 +1395,7 @@ shinyServer(function(input, output, session) {
             else {n1grams$ngrams[z]}
             
         }))
+        
         
         ## Beginnig of sentence markers are added, if there are not enough 
         ## words to form a 4-gram.
@@ -1427,11 +1430,11 @@ shinyServer(function(input, output, session) {
         
         ## All 5grams starting with this 4gram are selected
         
-        temp <- n5grams[str_detect(string = ngrams, pattern = temp), ngrams]
+        temp <- n5grams[str_which(string = ngrams, pattern = temp), ngrams]
         
         ## Keep the 15 most likely ngrams 
         
-        temp <- head(temp$ngrams, 15)
+        temp <- head(temp, 15)
         
         ## Get the last word in 5gram sequence (the prediction)
         
@@ -1455,10 +1458,10 @@ shinyServer(function(input, output, session) {
             
             temp <- paste("^", tail(temp, 1), sep = "")
             
-            temp <- n4grams[str_detect(string = ngrams, 
+            temp <- n4grams[str_which(string = ngrams, 
                                        pattern = temp), prob]
             
-            temp <- head(temp$ngrams, 15)
+            temp <- head(temp, 15)
             
             temp <- as.character(lapply(temp, getpred))
             

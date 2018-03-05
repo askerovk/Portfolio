@@ -41,7 +41,9 @@ shinyServer(function(input, output, session) {
         
         text <- char_tolower(text)
         
-        text <- as.character(lapply(X = 1 : length(text), FUN = function(i){
+        l <- if(length(text) > 0) {length(text)} else{1}
+        
+        text <- as.character(lapply(X = 1 : l, FUN = function(i){
             
             t <- paste("^", text[i], "$", sep = "")
             
@@ -80,9 +82,9 @@ shinyServer(function(input, output, session) {
         
         temp <- paste("^", tail(temp, 1), sep = "")
         
-        temp <- n5grams[str_detect(string = ngrams, pattern = temp), prob]
+        temp <- n5grams[str_which(string = ngrams, pattern = temp), ngrams]
         
-        temp <- head(temp$ngrams, 15)
+        temp <- head(temp, 15)
         
         temp <- as.character(lapply(temp, getpred))
         
@@ -96,9 +98,9 @@ shinyServer(function(input, output, session) {
             
             temp <- paste("^", tail(temp, 1), sep = "")
             
-            temp <- n4grams[str_detect(string = ngrams, pattern = temp), prob]
+            temp <- n4grams[str_which(string = ngrams, pattern = temp), ngrams]
             
-            temp <- head(temp$ngrams, 15)
+            temp <- head(temp, 15)
             
             temp <- as.character(lapply(temp, getpred))
             
@@ -114,9 +116,9 @@ shinyServer(function(input, output, session) {
                 
                 temp <- paste("^", tail(temp, 1), sep = "")
                 
-                temp <- n3grams[str_detect(string = ngrams, pattern = temp), prob]
+                temp <- n3grams[str_which(string = ngrams, pattern = temp), ngrams]
                 
-                temp <- head(temp$ngrams, 15)
+                temp <- head(temp, 15)
                 
                 temp <- as.character(lapply(temp, getpred))
                 
@@ -132,9 +134,9 @@ shinyServer(function(input, output, session) {
                     
                     temp <- paste("^", tail(temp, 1), sep = "")
                     
-                    temp <- n2grams[str_detect(string = ngrams, pattern = temp), prob]
+                    temp <- n2grams[str_which(string = ngrams, pattern = temp), ngrams]
                     
-                    temp <- head(temp$ngrams, 15)
+                    temp <- head(temp, 15)
                     
                     temp <- as.character(lapply(temp, getpred))
                     
