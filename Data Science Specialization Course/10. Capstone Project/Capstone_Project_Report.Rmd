@@ -13,7 +13,7 @@ thanks: "The author gratefully acknowledges the assitance of various members of 
 author:
 - name: by Kamran Rasim Asgarov
   affiliation: 
-abstract: "This paper describes the process of building a probabilistic English language model, capable of predicting words based on previous context. The model is trained on a corpus consisting of blog posts, online newspaper articles and twitter feeds. The basic model was smoothed by Kneser-Ney and pruned by Seymore-Rosenfeld methods. In addition, a simple Shiny application was built to showcase the model's capabilities. The app may be accessed [here](https://askerovk.shinyapps.io/5-gram_model) The end result is a 5-gram model, which recognizes over 40,000 words and 12,000,000 word combinations, is able to handle both unknown words and unknown combinations of words, and has a perplexity score of 205."
+abstract: "This paper describes the process of building a probabilistic English language model, capable of predicting words based on previous context. The model is trained on a corpus consisting of blog posts, online newspaper articles and twitter feeds. The basic model was smoothed by Kneser-Ney and pruned by Seymore-Rosenfeld methods. In addition, a simple Shiny application was built to showcase the model's capabilities. The app may be accessed [here](https://askerovk.shinyapps.io/5-grammodel) The end result is a 5-gram model, which recognizes over 40,000 words and 12,000,000 word combinations, is able to handle both unknown words and unknown combinations of words, and has a perplexity score of 253."
 keywords: 
 date: "25 of February 2018"
 geometry: margin=1in
@@ -1127,8 +1127,9 @@ rm(temp)
 wdf <- n5grams$sgt.count * (log(n5grams$prob) - log(n5grams$backoff.prob))
 ```
 
-Lastly, a cutoff w.d.f. point is selected to reduce the table size by a 90%. 
+Lastly, a cutoff w.d.f. point is selected to reduce the table size by 95%, due to the a hard limit of 1gb RAM of the ShinyApp hosting server [^shiny].
 
+[^shiny]: This project makes use of the free hosting package offered by https://www.shinyapps.io/. 
 ```{r}
 n5grams <- n5grams[, c("ngrams", "prob")]
 
@@ -1136,7 +1137,7 @@ n5grams <- data.table(n5grams)
 
 gc()
 
-n5grams <- n5grams[wdf >= 0.12 ,]
+n5grams <- n5grams[wdf >= 0.22 ,]
 
 save(n5grams, file = "n5grams-final")
 
@@ -1290,7 +1291,7 @@ load("prob.test")
 
 # 12. Building the Shiny app
 
-The ultimate goal of this assignment was to create a Shiny application, which would allow the user to submit a word or a sequence of words and have the model predict the next word. The application itself may be viewed [here](https://askerovk.shinyapps.io/5-gram_model).
+The ultimate goal of this assignment was to create a Shiny application, which would allow the user to submit a word or a sequence of words and have the model predict the next word. The application itself may be viewed [here](https://askerovk.shinyapps.io/5-grammodel).
 
 The first half of the application is the user interface, which consists of a set instructions for the app, a text field to input the text and 10 buttons, which show the words predicted by the model, from most to least likely.
 

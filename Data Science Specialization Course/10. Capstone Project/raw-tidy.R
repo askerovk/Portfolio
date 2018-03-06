@@ -1190,7 +1190,7 @@ rm(temp)
 save(n2grams, file = "n2grams")
 
 ############################## N1 Probability ##################################
-load("n1grams")
+load("backup/n2grams")
 
 n1grams <- n1grams[, -c("count")]
 
@@ -1393,12 +1393,12 @@ n4grams <- temp
 
 rm(temp)
 
-save(n4grams, file = "n4grams")
+save(n4grams, file = "backup/n4grams-prob")
 
 ##################################### N5 Probability ###################################
 n4grams <- n4grams[, c("ngrams", "prob")]
 
-load("n5grams")
+load("backup/n5grams")
 
 temp <- n5grams[, 1]
 
@@ -1450,7 +1450,9 @@ gc()
 
 load("temp")
 
-temp <- data.table(temp, n5grams[, c(1, 4, 5)])
+n5grams <- n5grams[, c(1, 4, 5)]
+
+temp <- data.table(temp, n5grams)
 
 n5grams <- temp
 
@@ -1458,7 +1460,7 @@ rm(temp)
 
 n5grams <- n5grams[-str_which(n5grams$ngrams, "s{15}"), ]
 
-save(n5grams, file = "n5grams")
+save(n5grams, file = "backup/n5grams-prob")
 
 ################################# Prune N5 #############################################
 
@@ -1535,7 +1537,7 @@ gt.count <- function(data){
 
 temp <- gt.count(temp)
 
-load("n5grams")
+load("backup/n5grams-prob")
 
 n5grams <- left_join(x = n5grams, y = temp, by = "count")
 
@@ -1549,14 +1551,14 @@ n5grams <- data.table(n5grams)
 
 gc()
 
-n5grams <- n5grams[wdf >= 0.12 ,]
+n5grams <- n5grams[wdf >= 0.22 ,]
 
 save(n5grams, file = "n5grams-final")
 
 rm(n5grams, wdf)
 ############################## Prune N4 ################################################
 
-load("n4grams")
+load("backup/n4grams-prob")
 
 temp <- n4grams$count
 
@@ -1570,7 +1572,7 @@ temp$r <- as.numeric(temp$r)
 
 temp <- gt.count(temp)
 
-load("n4grams")
+load("backup/n4grams-prob")
 
 n4grams <- left_join(x = n4grams, y = temp, by = "count")
 
@@ -1584,7 +1586,7 @@ n4grams <- data.table(n4grams)
 
 gc()
 
-n4grams <- n4grams[wdf >= 0.53 ,]
+n4grams <- n4grams[wdf >= 1 ,]
 
 save(n4grams, file = "n4grams-final")
 
@@ -1592,7 +1594,7 @@ rm(n4grams, wdf)
 
 ############################## Prune N3 ################################################
 
-load("n3grams")
+load("backup/n3grams")
 
 temp <- n3grams$count
 
@@ -1606,7 +1608,7 @@ temp$r <- as.numeric(temp$r)
 
 temp <- gt.count(temp)
 
-load("n3grams")
+load("backup/n3grams")
 
 n3grams <- left_join(x = n3grams, y = temp, by = "count")
 
@@ -1620,7 +1622,7 @@ n3grams <- data.table(n3grams)
 
 gc()
 
-n3grams <- n3grams[wdf >= 2 ,]
+n3grams <- n3grams[wdf >= 4.6 ,]
 
 save(n3grams, file = "n3grams-final")
 
@@ -1628,7 +1630,7 @@ rm(n3grams, wdf)
 
 ############################## Prune N2 ################################################
 
-load("n2grams")
+load("backup/n2grams")
 
 temp <- n2grams$count
 
@@ -1642,7 +1644,7 @@ temp$r <- as.numeric(temp$r)
 
 temp <- gt.count(temp)
 
-load("n2grams")
+load("backup/n2grams")
 
 n2grams <- left_join(x = n2grams, y = temp, by = "count")
 
@@ -1656,7 +1658,7 @@ n2grams <- data.table(n2grams)
 
 gc()
 
-n2grams <- n2grams[wdf >= 14.5 ,]
+n2grams <- n2grams[wdf >= 39 ,]
 
 save(n2grams, file = "n2grams-final")
 
