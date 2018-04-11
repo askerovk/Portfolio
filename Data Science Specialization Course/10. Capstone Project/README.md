@@ -3,7 +3,7 @@
 
 The assignment tasked students to create a probabilistic English language model, capable of predicting words based on previous context. The model itself was trained on a corpus consisting of blog posts, online newspaper articles and twitter feeds. The basic model was smoothed by Kneser-Ney and pruned by Seymore-Rosenfeld methods. 
 
-In addition, a simple Shiny application was built to showcase the model's capabilities. The end result is a 5-gram model, which recognizes over 40,000 words and 12,000,000 word combinations, is able to handle both unknown words and unknown combinations of words, and has a perplexity score of 253.
+In addition, a simple Shiny application was built to showcase the model's capabilities. The end result is a 5-gram model, which recognizes over 40,000 words and 5,000,000 word combinations, is able to handle both unknown words and unknown combinations of words, and has a perplexity score of 253.
 
 **Contents:**
 * Full project write-up is available as a "Capstone_Project_Report.pdf"
