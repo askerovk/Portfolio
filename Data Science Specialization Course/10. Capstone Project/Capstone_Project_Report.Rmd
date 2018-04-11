@@ -13,7 +13,7 @@ thanks: "The author gratefully acknowledges the assitance of various members of 
 author:
 - name: by Kamran Rasim Asgarov
   affiliation: 
-abstract: "This paper describes the process of building a probabilistic English language model, capable of predicting words based on previous context. The model is trained on a corpus consisting of blog posts, online newspaper articles and twitter feeds. The basic model was smoothed by Kneser-Ney and pruned by Seymore-Rosenfeld methods. In addition, a simple Shiny application was built to showcase the model's capabilities. The app may be accessed [here](https://askerovk.shinyapps.io/5-grammodel) The end result is a 5-gram model, which recognizes over 40,000 words and 12,000,000 word combinations, is able to handle both unknown words and unknown combinations of words, and has a perplexity score of 253."
+abstract: "This paper describes the process of building a probabilistic English language model, capable of predicting words based on previous context. The model is trained on a corpus consisting of blog posts, online newspaper articles and twitter feeds. The basic model was smoothed by Kneser-Ney and pruned by Seymore-Rosenfeld methods. In addition, a simple Shiny application was built to showcase the model's capabilities. The app may be accessed [here](https://askerovk.shinyapps.io/5-grammodel). The end result is a 5-gram model, which recognizes over 40,000 words and 5,000,000 word combinations, is able to handle both unknown words and unknown combinations of words, and has a perplexity score of 253."
 keywords: 
 date: "25 of February 2018"
 geometry: margin=1in
@@ -1293,7 +1293,32 @@ load("prob.test")
 
 The ultimate goal of this assignment was to create a Shiny application, which would allow the user to submit a word or a sequence of words and have the model predict the next word. The application itself may be viewed [here](https://askerovk.shinyapps.io/5-grammodel).
 
-The first half of the application is the user interface, which consists of a set instructions for the app, a text field to input the text and 10 buttons, which show the words predicted by the model, from most to least likely.
+The basic operating principle of the app is as follows:
+
+* Capture the last 4 words input by the user
+* If there are less than 4 words, add "sss" tokens untill there are.
+* Find all 5-grams with histories that match the 4 words.
+* If there are 5 or more 5-grams, select the ones with highest probability and display their last words as predictions.
+* If there are less than 5 5-grams, remove the first word from the 4 word sequence and match it with histories of 4-grams. 
+* Repeat for 3-grams and 2-grams if necessary.
+* If there are still less than 5 predictions by this point, supplement the difference with most likely unigrams. 
+
+In order to speed up the calculations performed by the app, it helps to split up each ngram into history and prediction. The code below is the same for each of the ngram tables.  
+
+```{r}
+history <- rmsuffix(n5grams$ngrams)
+
+ngram <- str_extract(string = n5grams$ngrams, pattern = "[a-z0-9]{3}$")
+
+n5grams <- data.table(history, ngram, prob = n5grams$prob)
+```
+```{r, eval = TRUE, echo = FALSE}
+load("n5grams-final")
+
+head(n5grams)
+```
+
+Next comes user interface of the application, which consists of a set instructions for the app, a text field to input the text and 5 buttons, which show the words predicted by the model, from most to least likely.
 
 ```{r}
 
@@ -1322,9 +1347,7 @@ shinyUI(fluidPage(
             
             actionButton("pred1", ""), actionButton("pred2", ""),
             actionButton("pred3", ""), actionButton("pred4", ""),
-            actionButton("pred5", ""), actionButton("pred6", ""),
-            actionButton("pred7", ""), actionButton("pred8", ""),
-            actionButton("pred9", ""), actionButton("pred10", "")
+            actionButton("pred5", "")
         ))))
 ```
 
@@ -1345,6 +1368,8 @@ load("n5grams-final")
 
 vocab <- c(n1grams$words)
 
+code <- n1grams$ngrams
+
 ## Most common words are used as default predictions, before the 
 ## user enters anything. 
 
@@ -1354,15 +1379,11 @@ rmprefix <- function(x){
     str_replace(string = x, pattern = "^[a-z0-9]{3}", replacement = "")    
 }
 
-getpred <- function(x){
-    str_extract(string = x, pattern = "[a-z0-9]{3}$")
-}
-
 ## Following code triggers when user types something
 
 shinyServer(function(input, output, session) {
     
-    data <- reactiveValues(predictions = unigrams)
+    data <- reactiveValues(predictions = unigrams[1:5])
     
     observeEvent(input$usertext, {
         
@@ -1379,23 +1400,19 @@ shinyServer(function(input, output, session) {
                     remove_twitter = TRUE, remove_hyphens = TRUE, 
                     remove_url = TRUE))
         
-        ## Captials are converted to lowercase
+        ## Last 4 words are selected and de-captialized. 
         
-        text <- char_tolower(text)
+        text <- char_tolower(text, 4)
         
         ## Individual words are encoded
         
-        l <- if(length(text) > 0) {length(text)} else{1}
-        
-        text <- as.character(lapply(X = 1 : l, FUN = function(i){
+        text <- as.character(lapply(X = text, FUN = function(i){
             
-            t <- paste("^", text[i], "$", sep = "")
+            z <- vocab == i
             
-            z <- str_which(string = n1grams$words, pattern = t)
+            if(sum(z) == 0) {"zzz"}
             
-            if(length(z) == 0) {"zzz"}
-            
-            else {n1grams$ngrams[z]}
+            else {code[z]}
             
         }))
         
@@ -1403,45 +1420,17 @@ shinyServer(function(input, output, session) {
         ## Beginnig of sentence markers are added, if there are not enough 
         ## words to form a 4-gram.
         
-        if(length(text) <= 4) {
-            
-            text <-c("sss", text)
-            
-            if(length(text) <= 4){
-                
-                text <-c("sss", text)
-                
-                if(length(text) <= 4){
-                    
-                    text <-c("sss", text)
-                    
-                    if(length(text) <= 4){
-                        
-                        text <-c("sss", text)
-                        }}}}
+        text <- tail(c("sss", "sss", "sss", "sss", text), 4)
         
-        text <- paste(text, collapse = " ")
-        
-        ## 4grams are formed from the encoded words
-        
-        temp <- tokens(x = text, what = "word", n = 4, 
-                       concatenator = "")$text1
-        
-        ## Last 4gram is chosen
-        
-        temp <- paste("^", tail(temp, 1), sep = "")
+        text <- paste(text, collapse = "")
         
         ## All 5grams starting with this 4gram are selected
         
-        temp <- n5grams[str_which(string = ngrams, pattern = temp), ngrams]
+        temp <- n5grams$ngram[n5grams$history == text]
         
-        ## Keep the 15 most likely ngrams 
+        ## Keep the 10 most likely ngrams 
         
-        temp <- head(temp, 15)
-        
-        ## Get the last word in 5gram sequence (the prediction)
-        
-        temp <- as.character(lapply(temp, getpred))
+        temp <- head(temp, 10)
         
         ## Rremove predictions if they start of sentence or unknown tokens. 
         
@@ -1450,30 +1439,19 @@ shinyServer(function(input, output, session) {
         ## If there is less than 10 predictions, repeat the process 
         ## with 4grams.
         
-        if (length(predictions) >= 10) {
-            
-            data$predictions <<- head(predictions, 10)}
+        if (length(predictions) >= 5) {data$predictions <<- head(predictions, 5)}
         
         else {
             
-            temp <- tokens(x = text, what = "word", n = 3, 
-                           concatenator = "")$text1
+            text <- rmprefix(text)
             
-            temp <- paste("^", tail(temp, 1), sep = "")
+            temp <- n4grams$ngram[n4grams$history == text]
             
-            temp <- n4grams[str_which(string = ngrams, 
-                                       pattern = temp), prob]
-            
-            temp <- head(temp, 15)
-            
-            temp <- as.character(lapply(temp, getpred))
+            temp <- head(temp, 10)
             
             temp <- temp[temp != "zzz" & temp != "sss"]
             
-            predictions <- unique(c(predictions, temp))
-            
-            if (length(predictions) >= 10) {
-                data$predictions <<- head(predictions, 10)}
+            predictions <- unique(c(predictions, temp))}
             
             #### TRUNCATED: the code repeats for 3-grams and 2-grams ####
             
@@ -1484,12 +1462,12 @@ shinyServer(function(input, output, session) {
                         
                         predictions <- unique(c(predictions, temp))
                         
-                        data$predictions <<- head(predictions, 10)}
+                        data$predictions <<- head(predictions, 5)}
                     }}}
         
         ## Decode predictions into words. 
         
-        data$predictions <- as.character(lapply(X = 1 : 10, 
+        data$predictions <- as.character(lapply(X = 1 : 5, 
                                                 FUN = function(i){
             
             z <- str_which(string = n1grams$ngrams, 
@@ -1503,15 +1481,12 @@ shinyServer(function(input, output, session) {
         ## most to least likely.
         
         updateActionButton(session = session, inputId = "pred1", 
-                           label = paste("1.", data$predictions[1]))
+                           label = paste("1.", data$predictions[1])),
         updateActionButton(session = session, inputId = "pred2", 
                            label = paste("2.", data$predictions[2]))
            
-        #### TRUNCATED: the code repeats for buttons 3-9 ####
-        
-        updateActionButton(session = session, inputId = "pred10", 
-                           label = paste("10.", data$predictions[10]))
-    })
+        #### TRUNCATED: the code repeats for buttons 3-5 ####
+        })
     
     ## The next chunk pastes a prediction into the text input field,
     ## if the corresponding button is pressed. 
@@ -1524,13 +1499,9 @@ shinyServer(function(input, output, session) {
         updateTextInput(session = session, "usertext", 
                         value = paste(input$usertext, data$predictions[2]))
     
-        #### TRUNCATED: the code repeats for buttons 3-9 ####
+        #### TRUNCATED: the code repeats for buttons 3-5 ####
         
-    })
-    observeEvent(input$pred10,{
-        updateTextInput(session = session, "usertext", 
-                        value = paste(input$usertext, data$predictions[10]))
-    })
+    
 })
 ```
 \newpage

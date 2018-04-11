@@ -1792,3 +1792,39 @@ stopCluster(cl)
 prob.test <- as.numeric(prob.test)
 
 2^-(sum(prob.test)/length(unlist(ngrams)))
+
+############################## Prepping Data for the Shiny App ##################################
+
+history <- rmsuffix(n5grams$ngrams)
+
+ngram <- str_extract(string = n5grams$ngrams, pattern = "[a-z0-9]{3}$")
+
+n5grams <- data.table(history, ngram, prob = n5grams$prob)
+
+history <- rmsuffix(n4grams$ngrams)
+
+ngram <- str_extract(string = n4grams$ngrams, pattern = "[a-z0-9]{3}$")
+
+n4grams <- data.table(history, ngram, prob = n4grams$prob)
+
+history <- rmsuffix(n3grams$ngrams)
+
+ngram <- str_extract(string = n3grams$ngrams, pattern = "[a-z0-9]{3}$")
+
+n3grams <- data.table(history, ngram, prob = n3grams$prob)
+
+history <- rmsuffix(n2grams$ngrams)
+
+ngram <- str_extract(string = n2grams$ngrams, pattern = "[a-z0-9]{3}$")
+
+n2grams <- data.table(history, ngram, prob = n2grams$prob)
+
+save(n1grams, file = "n1grams-final")
+
+save(n2grams, file = "n2grams-final")
+
+save(n3grams, file = "n3grams-final")
+
+save(n4grams, file = "n4grams-final")
+
+save(n5grams, file = "n5grams-final")
