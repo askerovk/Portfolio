@@ -1,0 +1,447 @@
+---
+output: 
+  pdf_document:
+    keep_tex: true
+    fig_caption: true
+    citation_package: biblatex
+    latex_engine: pdflatex
+    template: /home/kamran/Dropbox/Projects/svm-latex-ms.tex
+    toc: true
+title: "Price of Airbnb apartments in Berlin:"
+subtitle: "A linear regression model."
+thanks: "The author would like to thank Tom Slee for hosting the raw data at his website - http://tomslee.net/."
+author:
+- name: by Kamran Rasim Asgarov
+  affiliation: 
+abstract: "This paper illustrates the process of creating a linear regression model, aimed at predicting the price of an Airbnb listing, based on secondary factors, such as location, review score and others. The model's prediction accuracy is further improved with addition of quadratic, cubic and interaction terms. Lastly, Elastic Net regression is used to reduce the variance of prediction errors."
+keywords: 
+date: "10 July 2018"
+geometry: margin=1in
+fontfamily: mathpazo
+fontsize: 12pt
+endnote: no
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+knitr::opts_chunk$set(eval = TRUE)
+
+
+library(data.table) 
+
+library(ggplot2)
+
+library(gridExtra)
+
+library(caret)
+
+library(car)
+
+library(glmnet)
+```
+
+\newpage
+
+# 1. Introduction
+
+Airbnb is an online platform that helps connect travelers looking for short term accommodations, with landlords willing to rent out their property. Once the landlord registers an account with the website and submits the necessary permits, he/she is able to rent out their respective property on the Airbnb website for any price they deem reasonable.
+
+Much like any other market, the actual monetary value of a rental is determined by consumer demand for that type of accommodation the total number of available properties supplied by the landowners. Furthermore, since the cleanliness, size, location, amenities and other parameters of an apartment may vary greatly, the price of an rental is also influenced by its perceived "quality". 
+
+This creates a challenge for a landlord, as they need to determine a reasonable price for the property, by taking an average price of other similar rentals. One possible solution to this problem would be a regression model, trained on contemporary rental data for a given market, which is often a single city. Such a model could be used to predict the price of a rental, based on is qualities, such location, guest review scores, rental type, how many guests it can accommodate and etc. 
+
+# 2. Getting raw data
+
+The raw data used in to train the model is currently available at Tom Slee's website[@slee], who has information on  Airbnb markets in a number of cities worldwide. Data for the city of Berlin was chosen due to the the large size of its rental market, which should lead to more reliable regression estimates. 
+
+```{r, messages=FALSE}
+set.seed(49056)
+
+URL <- "https://s3.amazonaws.com/tomslee-airbnb-data-2/berlin.zip"
+
+download.file(url = URL, destfile = "raw.zip", method = "libcurl")
+
+unzip(zipfile = "raw.zip")
+
+raw1 <- fread("s3_files/berlin/tomslee_airbnb_berlin_1471_2017-07-21.csv")
+```
+
+As can be seen below, the this dataset has 21864 observations of 20 variables.
+```{r}
+dim(raw1)
+```
+\newpage
+```{r}
+names(raw1)
+```
+Unfortunately, the data set does not contain any information for some of the listed variables. 
+
+```{r}
+apply(X = raw1, MARGIN = 2, FUN = function(x){sum(is.na(x))})
+```
+Hence, these unnecessary variables shall be removed. Furthermore, the variables of principal interest to the model are "room_type", "neighborhood", "reviews" (total number of reviews), "overall_satisfaction" (review score), "accommodates" (number of guests per property), "bedrooms" (number of bedrooms) and price. Lastly, the "overall_satisfaction" variable will be renamed to "score" and the names of neighborhoods will be shortened for the sake of brevity. 
+
+\newpage
+```{r}
+raw1 <- raw1[,-c("country", "borough", "bathrooms", "minstay")]
+
+data1 <- raw1[,c("price", "room_type", "neighborhood", "reviews", 
+            "overall_satisfaction", "accommodates", "bedrooms")]
+
+names(data1)[5] <- "score" 
+
+dict <- c("Mitte", "Charlott.", "Pankow", "Friedrich.", "Treptow.", "Tempelhof.", "Spandau", "Reinick.", "Neukolln", "Lichten.", "Marzahn.", "Steglitz")
+
+names(dict) <- unique(data1$neighborhood)
+
+fun1 <- function(x){dict[[x]]}
+
+data1$neighborhood <- unname(sapply(data1$neighborhood, fun1))
+```
+
+
+
+# 3. Variable overview
+
+Most of the variables in our data set have a small number of unique values.
+
+```{r}
+apply(data1, 2, function(x){length(unique(x))})
+```
+Hence, bar charts can be used to effectively visualize all variables except price and reviews, which are better explained by histograms. 
+\newpage
+```{r, fig.height=7}
+bar <- function(z, c) {
+
+    ggplot(data=data1, aes_string(x=z, fill = z)) + geom_bar(stat = "count", 
+        color="black", fill = c) + xlab("") + ylab("Count") + 
+        theme_minimal() + guides(fill=FALSE) + ggtitle(z)
+}
+
+plot_list1 <- list()
+
+plot_list1[[1]] <- bar("room_type", "darkviolet")
+
+plot_list1[[2]] <- bar("neighborhood", "cadetblue2") 
+
+plot_list1[[3]] <- bar("score", "sienna2") + 
+    scale_x_continuous(breaks=seq(0, 5))
+
+plot_list1[[4]] <- bar("accommodates", "seagreen2")
+
+plot_list1[[5]] <- bar("bedrooms", "yellow2") + 
+    scale_x_continuous(breaks=seq(0, 5))
+
+plot_list1[[6]] <- ggplot(data=data1, aes_string(x="reviews")) + 
+    geom_histogram(binwidth = 15, color="black", fill = "red2") + xlab("") + 
+    ylab("Frequency") + theme_minimal() + guides(fill=FALSE) + 
+    ggtitle("reviews")
+
+plot_list1[[7]] <- ggplot(data=data1, aes_string(x="price")) + 
+    geom_histogram(binwidth = 50, 
+    color="black", fill = "dodgerblue3") + theme_minimal() + 
+    guides(fill=FALSE) + ggtitle("price") +
+    scale_x_continuous(name = "", breaks = seq(0, 3000, 200)) + 
+    scale_y_continuous(name = "Frequency", breaks = seq(0, 15000, 2500)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+grid.arrange(plot_list1[[1]], plot_list1[[2]], plot_list1[[3]], 
+             plot_list1[[4]], plot_list1[[5]], plot_list1[[6]], 
+             plot_list1[[7]], ncol=2)
+```
+
+Several conclusions can be drawn from these bar charts:
+
+* Most rental properties are either entire homes/apartments or rooms. Shared rooms are rare.
+
+* Most properties have a single bedroom and accommodate 1 adult. 
+
+* Vast majority of properties are priced between 50 and 175 EUR. 
+
+A separate note should be made about the "score" variable - Airbnb has a policy of not displaying a review score for a property, unless it has at least 3 user reviews. In this data set, properties with less than 3 reviews have a "score" variable 0. 
+
+```{r}
+v1 <- sum(data1$score==0)
+
+v2 <- sum(data1$score==0 & data1$reviews <=2)
+
+v3 <- sum(data1$score==0 & data1$reviews >=3)
+
+data.table("total properties with 0 score"=v1, "unrated"=v2, "rated"=v3)
+```
+Hence, the majority of properties with a score of 0 in this data set are unrated, as opposed to being rated poorly by the guests. Thus the true bar plot of the score variable looks as follows.
+
+```{r, fig.height=3, fig.width=4}
+data1$rated<- data1$reviews >=3
+
+ggplot(data=data1[data1$rated], aes_string(x="score")) + 
+    geom_bar(stat = "count", color="black", fill = "sienna2") + xlab("") + 
+    ylab("Count") + theme_minimal() + ggtitle("reviews") + 
+    scale_x_continuous(breaks=seq(0, 5))
+```
+
+With the unrated listings removed, it looks like the vast majority of the properties have positives scores of 4 stars and above. This is could potentially be explained by the fact that unlike hotels, who have several different avenues of acquiring guests, landlords renting properties on Airbnb are often fully reliant on the website. Hence, a property listing with low review scores is unlikely to get repeat bookings and would soon be driven off the market. 
+
+Now that each individual variable has been examined, it pays to look at how they behave in relation to "price". 
+\newpage
+```{r, fig.height=7}
+scatter <- function(z, c){
+  
+    ggplot(data = data1, aes_string(x=z, y="price")) + 
+    geom_point(size=2, alpha=0.5, shape=1, color=c) + 
+    ylab("price") + xlab(z) + guides(fill=FALSE)
+}
+
+plot_list2 <- list()
+
+plot_list2[[1]] <- 
+  ggplot(data = data1, aes_string(x="score", y="price", color="rated")) + 
+  geom_point(size=2, alpha=0.5, shape=1) + ylab("price") + xlab("score") + 
+  theme(legend.position = c(0.5, 1)) + 
+  scale_color_discrete(labels=c("unrated", "rated"))
+
+plot_list2[[2]] <- scatter("neighborhood", "red2") 
+
+plot_list2[[3]] <- scatter("reviews", "dodgerblue2")
+
+plot_list2[[4]] <- scatter("room_type", "darkviolet")
+
+plot_list2[[5]] <- scatter("accommodates", "seagreen2")
+
+plot_list2[[6]] <- scatter("bedrooms", "yellow3")
+
+grid.arrange(plot_list2[[1]], plot_list2[[2]], plot_list2[[3]], 
+             plot_list2[[4]], plot_list2[[5]], plot_list2[[6]])
+```
+Up until this point, the "score" variable has been treated as a continuous numerical value. However, as is shown in it's respective scatter plot, the "score" can also be treated as categorical. When a person assigns a star rating to a property, with 1 star showing complete dissatisfaction and 5 stars showing complete satisfaction respectively, they are in fact trying to fit their experience in one of 5 distinct categories. So it could make sense to treat score as an ordinal value. However, Airbnb guests do not rank the overall property - instead they assign a value of 0-5 stars in several categories, such as cleanliness of the apartment, its location, facilities and etc. A score calculated in this manner is closer to an interval value. Furthermore, it will be difficult to accurately model the impact of scores from 0 to 3.5 stars as separate categories, because only 0.7% of properties in the dataset fall within that range. 
+```{r}
+sum(data1$score <=3.5 & data1$rated==TRUE) / dim(data1)[1]
+```
+
+Hence, for the purpose of this study, the "score" variable will be treated as a continuous interval. 
+
+# 4. Building the model.
+
+With some basic understanding of the data set in hand, its time to build the first regression model and assess it's accuracy In order to separate the unrated properties from properties rated zero, the binary "rated" variable is added to the model (0 for unrated and 1 for rated). Next, the data set shall be split up into training set and test set. The former will be used to train several regression models and the latter shall be used to attain an unbiased model accuracy estimate. 
+
+```{r}
+train <- createDataPartition(y = data1$price, p=0.8, list = FALSE)
+
+test <- data1[-train]
+
+data1 <- data1[train]
+
+data1$rated <- as.integer(data1$rated)
+
+tc <- trainControl(method = "cv", number = 30)
+
+fit1 <- train(price ~ ., data=data1, method='lm', trControl=tc)
+
+fit1$results
+
+summary(fit1)$coef[, c(1, 2, 4)]
+```
+It appears that the model has RMSE of 50.91 and MAE of 24.60. Most of the variables appear to be significant under the 95% confidence test, with the exception of several neighborhoods, which do not seem to impact the value of a property 
+
+Interestingly, the "rated" variable has a highly negative sign, meaning that unrated properties tend to have higher rent than the rated properties. This might be due to the fact that guests prefer to stay in cheaper properties of the same standards and can easily find them in a market as big as that of Berlin. Hence, the higher priced properties do not receive enough guests to have a proper review score on the Airbnb website. 
+
+Now that the initial model has been trained, it must be examined for potential problems, so as to improve its prediction accuracy. 
+
+In the classic economic model of the market, the price of a commodity is set by forces of demand and supply. The validity of this model rests on the assumption that both consumers and suppliers of a commodity act in a rational manner. A rational supplier conducts a careful analysis of the market, determines the perceived value of his/her commodity and sets the price accordingly. Unfortunately, this assumption is not always realistic, because suppliers often lack the time, ability or the willingness to analyze the market. This is especially true in markets with low entry barriers, such as Airbnb, where a person with little business acumen may lease out her/his property with relative ease.
+
+Hence, a number of properties are likely to have unreasonably high or low prices, which would lead to the creation of high influence points, greatly affecting the prediction accuracy of the model. 
+
+One approach for identifying such points is calculating their Cook's distance, which measures the change in values predicted by the model, caused by removing a single observation from the training set. An observation which has a Cook's distance larger than 4*mean of Cook's distance is considered a high influence point. 
+
+```{r}
+cooksd <- cooks.distance(fit1$finalModel)
+
+out <- names(cooksd)[cooksd > 4*mean(cooksd)]
+
+out <- as.numeric(gsub(pattern = "X", replacement = "", x = out))
+
+outlier <- data1[out]
+
+dim(outlier)
+```
+
+Next step would be to re-train the regression model, with these points omitted, to see if the resulting model has a higher degree of accuracy. 
+
+```{r}
+data2 <- data1[-out]
+
+fit2 <- train(price ~ ., data=data2, method='lm', trControl=tc)
+
+fit2$results
+
+summary(fit2)$coef[, c(1, 2, 4)]
+```
+As expected, the exclusion of just 1% of the observations lead to a considerable improvement in RMSE, which signifies that the new model produced fewer extreme prediction errors. Naturally, the exclusion of such errors also lead to a decrease in the overall error variance, which lowered the MAE, but to a much lesser extent. 
+
+Another interesting result that the "reviews" coefficient is no longer significant under a 95% confidence interval. It seems reasonable, that the number of reviews a property has is not a useful indicator, unless the mean review score is known. Perhaps an interaction term is needed here? I order to create such a term, the "score" and "reviews" variables must be centered first, to avoid creating multicollinearity among regressors. 
+
+```{r}
+data3 <- data2
+
+data3$score <- data3$score - mean(data3$score)
+
+data3$reviews <- data3$reviews - mean(data3$reviews)
+
+fit3 <- train(price ~ . + score:reviews, data=data3, method='lm', 
+              trControl=tc)
+
+fit3$results
+
+summary(fit3)$coef[, c(1, 2, 4)]
+```
+
+Curiously, not only is the interaction term turns out to be significant, but its inclusion makes the reviews variable significant once again. Since the inclusion of this term has lowered the RMSE by a small margin, it shall remain a part of the model.
+
+Furthermore, it might be interesting to investigate if there is a relationship between the bedrooms and accommodates variables. The rationale for this second interaction variable is that a while higher maximum occupancy will certainly raise the price of an apartment, higher number of bedrooms increases the comfort and privacy of the guests. Thus, there might be a synergistic effect between these two variables. 
+
+```{r}
+data3$accommodates <- data3$accommodates - mean(data3$accommodates)
+
+data3$bedrooms <- data3$bedrooms - mean(data3$bedrooms)
+
+fit4 <- train(price ~ . + score:reviews + accommodates:bedrooms, data=data3, 
+              method='lm', trControl=tc)
+
+fit4$results
+
+summary(fit4)$coef[, c(1, 2, 4)]
+```
+Once again, the interaction variable is deemed significant and it helps to noticeably lower both RMSE and MAE.
+
+The accuracy of a linear regression model is highly dependent on the assumption that all independent variables have a linear regression with the dependent variable. A good way to test this assumption for a multiple regression model, is to plot partial residuals for each independent variable.
+
+```{r, warning=FALSE}
+data3$reviews.score <- data3$reviews * data3$score
+
+data3$accommodates.bedrooms <- data3$accommodates * data3$bedrooms
+
+fit4 <- train(price ~ ., data=data3, method='lm', trControl=tc)
+
+crPlots(model = fit4$finalModel, terms = ~score + reviews + accommodates + 
+          bedrooms + reviews.score + accommodates.bedrooms)
+```
+
+From the plots above, all variables except "bedrooms" and "accommodates.bedrooms" have a very linear relationship with price. This can be corrected by adding quadratic and cubic forms of these two variables.
+
+```{r, warnings = FALSE}
+fit5 <- train(price ~. + I(bedrooms^2) + I(bedrooms^3) +
+        I(accommodates.bedrooms^2) + I(accommodates.bedrooms^3), 
+        data=data3, method='lm', trControl=tc)
+
+fit5$results
+
+summary(fit5)$coef[, c(1, 2, 4)]
+```
+The additional variables to seem to be significant, with the exception of bedrooms^2, which will be removed. 
+
+```{r}
+fit6 <- train(price ~. + I(bedrooms^3) + I(accommodates.bedrooms^2) + 
+        I(accommodates.bedrooms^3), data=data3, 
+        method='lm', trControl=tc)
+
+fit6$results
+
+summary(fit6)$coef[, c(1, 2, 4)]
+```
+
+With the non-linearity problem mostly solved, the predictive accuracy of the model may be further improved by shrinking the size of the regression coefficients. Three shrinkage strategies shall be considered in this paper: Ridge, Lasso and Elastic Net. Substituting the ordinary least squares (OLS) regression with any of these strategies results in higher prediction bias, but very often leads to an even greater decrease in variance, thus improving the predictive power of the model. "glmnet" R package allows to build a model around each strategy by setting the $\alpha$ parameter to 0 for Ridge, 1 for Lasso and to any number in between for Elastic Net regression. The "elastic" custom function trains 21 models, with $\alpha$ values from 0 to 1, in increments of 0.05 and uses 30 fold cross validation to select the optimal value of the tuning parameter $\lambda$. Then, the function outputs the model with the lowest RMSE, determined through 30 fold cross validation. 
+```{r}
+data3$bedrooms.3 <- data3$bedrooms^3
+
+data3$accommodates.bedrooms.2 <- data3$accommodates.bedrooms^2
+
+data3$accommodates.bedrooms.3 <- data3$accommodates.bedrooms^3
+
+dm <- model.matrix(price~., data3)[, -1]
+
+elastic <- function(x, y){
+  
+  a <- seq(0, 1, 0.05)
+  
+  tc <- trainControl(method = "cv", number = 30)
+  
+  models <- lapply(a, function(a){
+    
+    l <- cv.glmnet(x = x, y = y, alpha=a, nfolds = 50)$lambda.min
+    
+    train(x = x, y = y, method = "glmnet", trControl = tc, 
+          tuneGrid = expand.grid(alpha=a, lambda=l))
+    
+  })
+  
+  RMSE <- sapply(1:21, function(i){ 
+    
+    models[[i]]$results[[3]] 
+    
+    })
+  
+  result <- models[RMSE==min(RMSE)]
+  result[[1]]
+  }
+
+fit7 <- elastic(dm, data3$price)
+
+fit7$results[c(1, 2, 3, 5)]
+```
+
+In this case, the lowest error was produced by the Elastic Net regression with $\alpha$ value of 0.45 and $\lambda$ value close to zero. The latest model shows the lowest values for RMSE and MAE among all the others.
+
+# 5. Testing the final model.
+
+Now that the regression model has been tuned accordingly, its accuracy shall be tested on the test data set. 
+
+```{r}
+test$rated <- as.integer(test$rated)
+
+cooksd <- cooks.distance(train(price ~ ., data=test, method='lm', 
+                               trControl=tc)$finalModel)
+
+out <- names(cooksd)[cooksd > 4*mean(cooksd)]
+
+out <- as.numeric(gsub(pattern = "X", replacement = "", x = out))
+
+test <- test[-out]
+
+test$score <- test$score - mean(test$score)
+
+test$reviews <- test$reviews - mean(test$reviews)
+
+test$accommodates <- test$accommodates - mean(test$accommodates)
+
+test$bedrooms <- test$bedrooms - mean(test$bedrooms)
+
+
+test$reviews.score <- test$reviews * test$score
+
+test$accommodates.bedrooms <- test$accommodates * test$bedrooms
+
+test$bedrooms.3 <- test$bedrooms^3
+
+test$accommodates.bedrooms.2 <- test$accommodates.bedrooms^2
+
+test$accommodates.bedrooms.3 <- test$accommodates.bedrooms^3
+
+dm2 <- model.matrix(price~., test)[, -1]
+
+predicted <- predict(fit7, newdata = dm2)
+
+postResample(test$price, predicted)
+```
+
+As is to be expected, predictions made on the test set have slightly higher RMSE and MAE, but on the whole the model does not show clear signs of overfitting.
+
+# 6. Conclusion.
+
+Despite the numerous attempts to improve the predictive power of the model, it only explains 47% of the variance present in the data set. This strongly suggests the existence of other important independent variables, not captured in the given data set. Such variables may include the various amenities, such as bathtubs, air conditioning, large television sets and etc. Furthermore, the various rules and policies of a property may affect the price, such as check-in timings, cancellation policy, whether pets/smoking is allowed and minimum duration of stay and the property.
+
+These factors pose interesting avenues for further research and could greatly enhance the accuracy of the current model. 
+
+\printbibliography[heading = bibintoc, title = {7. References.}]
