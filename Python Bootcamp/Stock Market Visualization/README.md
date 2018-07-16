@@ -1,4 +1,4 @@
-# Stock Market Data Visualization Exercise. 
+## Stock Market Data Visualization Exercise. 
 
 * In this exercise, students were tasked to use Seaborn and Plotly libraries to visualize historical stock price data for six major banks.
 
